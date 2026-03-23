@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RF Design Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090b;
+  --bg2:#111113;
+  --bg3:#18181b;
+  --bg4:#1c1c1f;
+  --border:#27272a;
+  --border2:#3f3f46;
+  --t1:#fafafa;
+  --t2:#a1a1aa;
+  --t3:#52525b;
+  --acc:#22d3ee;
+  --acc2:#0891b2;
+  --acc-dim:rgba(34,211,238,0.08);
+  --acc-border:rgba(34,211,238,0.25);
+  --green:#4ade80;
+  --yellow:#fbbf24;
+  --red:#f87171;
+  --orange:#fb923c;
+  --purple:#a78bfa;
+  --font-display:'Syne',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+html{font-size:15px}
+body{background:var(--bg);color:var(--t1);font-family:var(--font-mono);min-height:100vh;overflow-x:hidden}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* LAYOUT */
+.shell{display:grid;grid-template-rows:auto 1fr;height:100vh}
+.topbar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;z-index:100;padding:0}
+.logo{font-family:var(--font-display);font-size:14px;font-weight:800;letter-spacing:.05em;color:var(--acc);padding:0 20px;border-right:1px solid var(--border);height:50px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.logo-dot{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tabs{display:flex;height:50px;overflow-x:auto}
+.tab{font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;padding:0 16px;border:none;background:none;color:var(--t3);cursor:pointer;border-right:1px solid var(--border);white-space:nowrap;transition:color .15s,background .15s;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--t2);background:var(--bg3)}
+.tab.active{color:var(--acc);background:var(--acc-dim);border-bottom:1px solid var(--acc)}
+.tab-num{font-size:9px;opacity:.5}
+.content{overflow-y:auto;background:var(--bg)}
+
+/* PANELS */
+.panel{display:none;padding:24px;max-width:1200px;margin:0 auto}
+.panel.active{display:block}
+.panel-grid{display:grid;gap:16px}
+.panel-grid-2{grid-template-columns:340px 1fr}
+.panel-grid-3{grid-template-columns:280px 1fr 300px}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px}
+.card-title{font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--t3);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title::before{content:'';width:3px;height:3px;border-radius:50%;background:var(--acc)}
+
+/* FORM ELEMENTS */
+.field{margin-bottom:14px}
+.field-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.field-label span{color:var(--acc);font-weight:600;font-size:11px}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:2px;background:var(--border2);border-radius:1px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--acc);cursor:pointer;border:2px solid var(--bg)}
+input[type=number],input[type=text]{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:12px;outline:none;transition:border-color .15s}
+input[type=number]:focus,input[type=text]:focus{border-color:var(--acc-border)}
+select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:12px;outline:none;cursor:pointer}
+select:focus{border-color:var(--acc-border)}
+.btn{font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;padding:8px 16px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--t2);cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--acc-border);color:var(--acc);background:var(--acc-dim)}
+.btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
+.btn.primary:hover{background:#67e8f9;border-color:#67e8f9}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* METRICS */
+.metrics{display:grid;gap:8px}
+.metric{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+.metric-name{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}
+.metric-val{font-family:var(--font-mono);font-size:18px;font-weight:600;transition:color .3s}
+.metric-val.good{color:var(--green)}
+.metric-val.warn{color:var(--yellow)}
+.metric-val.bad{color:var(--red)}
+.metric-bar{height:2px;background:var(--border);border-radius:1px;margin-top:6px;overflow:hidden}
+.metric-fill{height:100%;border-radius:1px;transition:width .4s ease}
+
+/* STATUS BADGE */
+.status{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:4px}
+.status.good{color:var(--green);background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2)}
+.status.warn{color:var(--yellow);background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2)}
+.status.bad{color:var(--red);background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2)}
+.status::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* CHART WRAPPER */
+.chart-wrap{position:relative;height:220px}
+
+/* AI PANEL */
+.ai-messages{display:flex;flex-direction:column;gap:10px;min-height:180px;max-height:260px;overflow-y:auto;padding:4px 0}
+.ai-msg{font-size:12px;line-height:1.7;padding:10px 14px;border-radius:6px;border-left:2px solid var(--acc);background:var(--bg3);color:var(--t2)}
+.ai-msg strong{color:var(--t1)}
+.ai-msg .ai-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--acc);margin-bottom:4px}
+
+/* WAVE CANVAS */
+#waveCanvas{width:100%;border-radius:6px;display:block;background:var(--bg3)}
+
+/* SMITH CANVAS */
+#smithCanvas{width:100%;border-radius:6px;display:block}
+
+/* CIRCUIT SVG */
+.circuit-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:16px;text-align:center;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.circuit-svg{width:100%;max-width:400px}
+
+/* LEARNING PANEL */
+.learn-level-btn{font-size:10px;letter-spacing:.08em;padding:5px 12px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--t3);cursor:pointer;font-family:var(--font-mono);transition:all .15s}
+.learn-level-btn.active{border-color:var(--acc-border);color:var(--acc);background:var(--acc-dim)}
+.learn-content{font-size:12px;line-height:1.8;color:var(--t2);margin-top:12px}
+.learn-content h3{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--t1);margin:14px 0 6px}
+.learn-content .formula-box{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 14px;font-family:var(--font-mono);font-size:12px;color:var(--acc);margin:8px 0}
+.learn-content .callout{border-left:2px solid var(--yellow);padding:8px 12px;background:rgba(251,191,36,.06);border-radius:0 5px 5px 0;color:var(--t2);margin:10px 0}
+
+/* COMPONENT DISPLAY */
+.comp-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.comp-row:last-child{border-bottom:none}
+.comp-name{font-size:11px;color:var(--t2)}
+.comp-val{font-size:13px;color:var(--acc);font-weight:600}
+
+/* SWEEP TABLE */
+.sweep-info{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.sweep-chip{font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);color:var(--t3)}
+.sweep-chip.highlight{border-color:var(--acc-border);color:var(--acc);background:var(--acc-dim)}
+
+/* ANTENNA PRESETS */
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.preset-btn{font-size:11px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--t2);cursor:pointer;font-family:var(--font-mono);text-align:left;transition:all .15s;line-height:1.5}
+.preset-btn:hover{border-color:var(--acc-border);color:var(--acc);background:var(--acc-dim)}
+.preset-btn strong{display:block;color:var(--t1);font-size:10px;margin-bottom:2px}
+
+/* RESPONSIVE */
+@media(max-width:800px){
+  .panel-grid-2,.panel-grid-3{grid-template-columns:1fr}
+  .panel{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo"><div class="logo-dot"></div>RF LAB</div>
+  <div class="tabs">
+    <button class="tab active" onclick="showPanel('impedance')"><span class="tab-num">01</span>IMPEDANCE</button>
+    <button class="tab" onclick="showPanel('sweep')"><span class="tab-num">02</span>SWEEP</button>
+    <button class="tab" onclick="showPanel('wave')"><span class="tab-num">03</span>WAVE SIM</button>
+    <button class="tab" onclick="showPanel('match')"><span class="tab-num">04</span>MATCHING</button>
+    <button class="tab" onclick="showPanel('smith')"><span class="tab-num">05</span>SMITH CHART</button>
+    <button class="tab" onclick="showPanel('learn')"><span class="tab-num">06</span>LEARN</button>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ═══════════════════════════════════════════════════════
+     PANEL 1 — IMPEDANCE LAB
+═══════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-impedance">
+  <div class="panel-grid panel-grid-3" style="align-items:start">
+
+    <!-- INPUT CARD -->
+    <div class="card">
+      <div class="card-title">Load Parameters</div>
+
+      <div class="field">
+        <div class="field-label">Resistance R (Ω) <span id="rVal">75</span></div>
+        <input type="range" id="rSlider" min="1" max="300" value="75" oninput="syncInput('r');calcImpedance()">
+        <input type="number" id="rNum" value="75" min="1" max="10000" oninput="syncSlider('r');calcImpedance()" style="margin-top:6px">
+      </div>
+
+      <div class="field">
+        <div class="field-label">Reactance X (Ω) <span id="xVal">+30</span></div>
+        <input type="range" id="xSlider" min="-200" max="200" value="30" oninput="syncInput('x');calcImpedance()">
+        <input type="number" id="xNum" value="30" min="-10000" max="10000" oninput="syncSlider('x');calcImpedance()" style="margin-top:6px">
+      </div>
+
+      <div class="field">
+        <div class="field-label">Reference Z₀ (Ω) <span id="z0Val">50</span></div>
+        <input type="range" id="z0Slider" min="10" max="300" value="50" oninput="syncInput('z0');calcImpedance()">
+        <input type="number" id="z0Num" value="50" min="1" max="1000" oninput="syncSlider('z0');calcImpedance()" style="margin-top:6px">
+      </div>
+
+      <div style="margin-top:16px">
+        <div class="card-title" style="margin-bottom:12px">Antenna Presets</div>
+        <div class="preset-grid">
+          <button class="preset-btn" onclick="setPreset(50,0)"><strong>Matched</strong>50+j0 Ω</button>
+          <button class="preset-btn" onclick="setPreset(75,0)"><strong>Dipole</strong>75+j0 Ω</button>
+          <button class="preset-btn" onclick="setPreset(73,42.5)"><strong>Half-wave</strong>73+j42 Ω</button>
+          <button class="preset-btn" onclick="setPreset(25,-15)"><strong>Patch</strong>25-j15 Ω</button>
+          <button class="preset-btn" onclick="setPreset(150,80)"><strong>Yagi</strong>150+j80 Ω</button>
+          <button class="preset-btn" onclick="setPreset(10,-40)"><strong>Short stub</strong>10-j40 Ω</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULTS CARD -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Results <span id="matchStatus" class="status warn" style="margin-left:auto">Checking...</span></div>
+        <div class="metrics">
+          <div class="metric">
+            <div>
+              <div class="metric-name">Γ — Reflection Coeff.</div>
+              <div class="metric-val" id="gammaVal">0.000</div>
+            </div>
+            <div style="text-align:right;font-size:10px;color:var(--t3)" id="gammaAngle">∠0°</div>
+          </div>
+          <div class="metric">
+            <div>
+              <div class="metric-name">VSWR</div>
+              <div class="metric-val" id="vswrVal">1.00</div>
+            </div>
+            <div class="metric-bar" style="width:60px"><div class="metric-fill" id="vswrBar" style="width:1%"></div></div>
+          </div>
+          <div class="metric">
+            <div>
+              <div class="metric-name">Return Loss</div>
+              <div class="metric-val" id="rlVal">∞ dB</div>
+            </div>
+          </div>
+          <div class="metric">
+            <div>
+              <div class="metric-name">Mismatch Loss</div>
+              <div class="metric-val" id="mlVal">0.00 dB</div>
+            </div>
+          </div>
+          <div class="metric">
+            <div>
+              <div class="metric-name">Power Delivered %</div>
+              <div class="metric-val" id="powerVal">100%</div>
+            </div>
+            <div class="metric-bar" style="width:60px"><div class="metric-fill" id="powerBar" style="width:100%;background:var(--green)"></div></div>
+          </div>
+          <div class="metric">
+            <div>
+              <div class="metric-name">|ZL| Magnitude</div>
+              <div class="metric-val" id="zlMagVal">50.0 Ω</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHASOR CANVAS -->
+      <div class="card">
+        <div class="card-title">Impedance Phasor</div>
+        <canvas id="phasorCanvas" width="500" height="180" style="width:100%;border-radius:4px"></canvas>
+      </div>
+    </div>
+
+    <!-- AI CARD -->
+    <div class="card">
+      <div class="card-title">AI Diagnosis</div>
+      <div class="ai-messages" id="aiMessages">
+        <div class="ai-msg">
+          <div class="ai-label">RF Assistant</div>
+          Adjust the parameters to get a diagnosis of your impedance mismatch and matching suggestions.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     PANEL 2 — FREQUENCY SWEEP
+═══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-sweep">
+  <div class="panel-grid panel-grid-2" style="align-items:start">
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Component Model</div>
+
+        <div class="field">
+          <div class="field-label">Element Type</div>
+          <select id="sweepType" onchange="runSweep()">
+            <option value="RL">Series RL (Resistor + Inductor)</option>
+            <option value="RC">Series RC (Resistor + Capacitor)</option>
+            <option value="LC">Series LC (Resonant)</option>
+            <option value="RLC">Series RLC (Full)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="field-label">Resistance R (Ω) <span id="sRVal">50</span></div>
+          <input type="range" id="sRSlider" min="1" max="300" value="50" oninput="document.getElementById('sRVal').textContent=this.value;runSweep()">
+        </div>
+
+        <div class="field" id="fieldL">
+          <div class="field-label">Inductance L (nH) <span id="sLVal">10</span></div>
+          <input type="range" id="sLSlider" min="1" max="200" value="10" oninput="document.getElementById('sLVal').textContent=this.value;runSweep()">
+        </div>
+
+        <div class="field" id="fieldC">
+          <div class="field-label">Capacitance C (pF) <span id="sCVal">10</span></div>
+          <input type="range" id="sCSlider" min="1" max="500" value="10" oninput="document.getElementById('sCVal').textContent=this.value;runSweep()">
+        </div>
+
+        <div class="field">
+          <div class="field-label">Freq Range</div>
+          <select id="freqRange" onchange="runSweep()">
+            <option value="100">0 – 100 MHz</option>
+            <option value="1000" selected>0 – 1 GHz</option>
+            <option value="5000">0 – 5 GHz</option>
+            <option value="10000">0 – 10 GHz</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SWEEP STATS -->
+      <div class="card">
+        <div class="card-title">Sweep Summary</div>
+        <div class="sweep-info">
+          <div class="sweep-chip" id="resChip">Resonance: —</div>
+          <div class="sweep-chip" id="bwChip">BW (VSWR&lt;2): —</div>
+          <div class="sweep-chip" id="minVswrChip">Min VSWR: —</div>
+        </div>
+        <div id="sweepAI" style="font-size:11px;color:var(--t2);line-height:1.8;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-title">VSWR vs Frequency</div>
+        <div class="chart-wrap"><canvas id="vswrChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Return Loss vs Frequency</div>
+        <div class="chart-wrap"><canvas id="rlChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">|Γ| vs Frequency</div>
+        <div class="chart-wrap"><canvas id="gammaChart"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     PANEL 3 — WAVE SIMULATOR
+═══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-wave">
+  <div class="panel-grid panel-grid-2" style="align-items:start">
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Wave Parameters</div>
+        <div class="field">
+          <div class="field-label">Reflection |Γ| <span id="wGammaVal">0.50</span></div>
+          <input type="range" id="wGamma" min="0" max="100" value="50" oninput="document.getElementById('wGammaVal').textContent=(this.value/100).toFixed(2);updateWaveInfo()">
+        </div>
+        <div class="field">
+          <div class="field-label">Frequency (MHz) <span id="wFreqVal">100</span></div>
+          <input type="range" id="wFreq" min="10" max="1000" value="100" oninput="document.getElementById('wFreqVal').textContent=this.value;updateWaveInfo()">
+        </div>
+        <div class="field">
+          <div class="field-label">Phase shift (°) <span id="wPhaseVal">0</span></div>
+          <input type="range" id="wPhase" min="0" max="360" value="0" oninput="document.getElementById('wPhaseVal').textContent=this.value;updateWaveInfo()">
+        </div>
+        <div style="margin-top:12px" class="btn-row">
+          <button class="btn primary" id="wavePlayBtn" onclick="toggleWave()">▶ PLAY</button>
+          <button class="btn" onclick="resetWave()">RESET</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Wave Info</div>
+        <div class="metrics">
+          <div class="metric"><div><div class="metric-name">Wavelength λ</div><div class="metric-val" id="wLambda" style="font-size:14px">3.00 m</div></div></div>
+          <div class="metric"><div><div class="metric-name">Standing Wave Ratio</div><div class="metric-val" id="wVswr" style="font-size:14px">3.00</div></div></div>
+          <div class="metric"><div><div class="metric-name">Forward Power</div><div class="metric-val" id="wFwdPow" style="font-size:14px">100%</div></div></div>
+          <div class="metric"><div><div class="metric-name">Reflected Power</div><div class="metric-val" id="wRefPow" style="font-size:14px;color:var(--red)">25%</div></div></div>
+        </div>
+        <div style="margin-top:12px;font-size:10px;color:var(--t3)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><div style="width:18px;height:2px;background:var(--acc)"></div>Forward wave</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><div style="width:18px;height:2px;background:var(--orange)"></div>Reflected wave</div>
+          <div style="display:flex;align-items:center;gap:8px"><div style="width:18px;height:2px;background:var(--green);border-top:1px dashed var(--green)"></div>Standing wave envelope</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="height:fit-content">
+      <div class="card-title">Transmission Line Visualization</div>
+      <canvas id="waveCanvas" height="400"></canvas>
+      <div style="margin-top:10px;font-size:10px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
+        <span>● Nodes (zero amplitude)</span>
+        <span>● Antinodes (max amplitude)</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     PANEL 4 — MATCHING CIRCUIT
+═══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-match">
+  <div class="panel-grid panel-grid-2" style="align-items:start">
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Matching Parameters</div>
+        <div class="field">
+          <div class="field-label">Load Resistance RL (Ω)</div>
+          <input type="number" id="mRL" value="75" min="1" oninput="calcMatch()">
+        </div>
+        <div class="field">
+          <div class="field-label">Load Reactance XL (Ω)</div>
+          <input type="number" id="mXL" value="30" oninput="calcMatch()">
+        </div>
+        <div class="field">
+          <div class="field-label">Reference Z₀ (Ω)</div>
+          <input type="number" id="mZ0" value="50" min="1" oninput="calcMatch()">
+        </div>
+        <div class="field">
+          <div class="field-label">Frequency (MHz)</div>
+          <input type="number" id="mFreq" value="2400" min="1" oninput="calcMatch()">
+        </div>
+        <div class="field">
+          <div class="field-label">Network Type</div>
+          <select id="mType" onchange="calcMatch()">
+            <option value="LP">L-Network (Low-Pass)</option>
+            <option value="HP">L-Network (High-Pass)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Computed Components</div>
+        <div id="matchComponents">
+          <div style="color:var(--t3);font-size:11px">Enter parameters above...</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-title">Circuit Diagram</div>
+        <div class="circuit-wrap" id="circuitDiagram">
+          <div style="color:var(--t3);font-size:11px">Diagram appears here</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Before vs After VSWR</div>
+        <div class="chart-wrap"><canvas id="matchChart"></canvas></div>
+      </div>
+      <div class="card" id="matchAICard">
+        <div class="card-title">AI Analysis</div>
+        <div id="matchAI" style="font-size:12px;color:var(--t2);line-height:1.8"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     PANEL 5 — SMITH CHART
+═══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-smith">
+  <div class="panel-grid panel-grid-2" style="align-items:start">
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Smith Chart Controls</div>
+        <div class="field">
+          <div class="field-label">Normalized R <span id="sNrVal">1.50</span></div>
+          <input type="range" id="sNr" min="0" max="500" value="150" oninput="document.getElementById('sNrVal').textContent=(this.value/100).toFixed(2);updateSmith()">
+        </div>
+        <div class="field">
+          <div class="field-label">Normalized X <span id="sNxVal">+0.60</span></div>
+          <input type="range" id="sNx" min="-200" max="200" value="60" oninput="document.getElementById('sNxVal').textContent=(this.value>=0?'+':'')+(this.value/100).toFixed(2);updateSmith()">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t2);cursor:pointer">
+            <input type="checkbox" id="smithSweep" onchange="updateSmith()" style="width:auto;accent-color:var(--acc)">
+            Show frequency sweep locus
+          </label>
+        </div>
+        <div class="field" id="smithSweepFields" style="display:none">
+          <div class="field-label">Inductance L (nH) <span id="smithLVal">10</span></div>
+          <input type="range" id="smithL" min="1" max="100" value="10" oninput="document.getElementById('smithLVal').textContent=this.value;updateSmith()">
+          <div class="field-label" style="margin-top:8px">Capacitance C (pF) <span id="smithCVal">10</span></div>
+          <input type="range" id="smithC" min="1" max="500" value="10" oninput="document.getElementById('smithCVal').textContent=this.value;updateSmith()">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Point Readout</div>
+        <div class="metrics">
+          <div class="metric"><div><div class="metric-name">Norm. Impedance z</div><div class="metric-val" id="smithZ" style="font-size:13px">1.50 + j0.60</div></div></div>
+          <div class="metric"><div><div class="metric-name">|Γ|</div><div class="metric-val" id="smithGamma" style="font-size:13px">0.321</div></div></div>
+          <div class="metric"><div><div class="metric-name">VSWR</div><div class="metric-val" id="smithVswr" style="font-size:13px">1.95</div></div></div>
+          <div class="metric"><div><div class="metric-name">Return Loss</div><div class="metric-val" id="smithRL" style="font-size:13px">9.9 dB</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Smith Chart</div>
+      <canvas id="smithCanvas" width="500" height="500" style="width:100%;max-width:500px;margin:0 auto;display:block"></canvas>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     PANEL 6 — LEARN
+═══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-learn">
+  <div class="panel-grid panel-grid-2">
+
+    <div class="card">
+      <div class="card-title">Learning Mode</div>
+      <div class="btn-row" style="margin-bottom:0">
+        <button class="learn-level-btn active" onclick="setLearnLevel(0,this)">Beginner</button>
+        <button class="learn-level-btn" onclick="setLearnLevel(1,this)">Intermediate</button>
+        <button class="learn-level-btn" onclick="setLearnLevel(2,this)">Advanced</button>
+      </div>
+      <div class="learn-content" id="learnContent"></div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Quick Reference</div>
+        <div style="font-size:11px;color:var(--t2);line-height:2">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">
+            <div>VSWR = 1</div><div style="color:var(--green)">Perfect match</div>
+            <div>VSWR &lt; 1.5</div><div style="color:var(--green)">Excellent</div>
+            <div>VSWR &lt; 2.0</div><div style="color:var(--yellow)">Good (2:1)</div>
+            <div>VSWR &lt; 3.0</div><div style="color:var(--orange)">Marginal</div>
+            <div>VSWR ≥ 3.0</div><div style="color:var(--red)">Poor match</div>
+            <div style="margin-top:8px">RL &gt; 20 dB</div><div style="color:var(--green);margin-top:8px">Excellent</div>
+            <div>RL &gt; 10 dB</div><div style="color:var(--yellow)">Acceptable</div>
+            <div>RL &lt; 10 dB</div><div style="color:var(--red)">Fix needed</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">All Formulas</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">Reflection Coefficient</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">Γ = (ZL − Z₀) / (ZL + Z₀)</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">VSWR</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">VSWR = (1 + |Γ|) / (1 − |Γ|)</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">Return Loss</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">RL = −20 · log₁₀(|Γ|) dB</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">Power Delivered</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">Pdel = (1 − |Γ|²) × Pinc</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">Inductive Reactance</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">XL = 2π × f × L</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">Capacitive Reactance</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">XC = 1 / (2π × f × C)</div>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">L-Network Q factor</div>
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--acc)">Q = √(Rhigh/Rlow − 1)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /shell -->
+
+<script>
+/* ============================================================
+   GLOBALS & CHART REFS
+============================================================ */
+let vswrChartInst=null, rlChartInst=null, gammaChartInst=null, matchChartInst=null;
+let waveAnimId=null, wavePhase=0, waveRunning=false;
+
+const CHART_DEFAULTS = {
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{display:false}, tooltip:{
+    backgroundColor:'#18181b', borderColor:'#3f3f46', borderWidth:1,
+    titleColor:'#fafafa', bodyColor:'#a1a1aa',
+    titleFont:{family:"'IBM Plex Mono',monospace",size:11},
+    bodyFont:{family:"'IBM Plex Mono',monospace",size:11},
+  }},
+  scales:{
+    x:{ticks:{color:'#52525b',font:{family:"'IBM Plex Mono',monospace",size:10}},
+       grid:{color:'#27272a'},border:{color:'#27272a'}},
+    y:{ticks:{color:'#52525b',font:{family:"'IBM Plex Mono',monospace",size:10}},
+       grid:{color:'#27272a'},border:{color:'#27272a'}}
+  }
+};
+
+/* ============================================================
+   NAVIGATION
+============================================================ */
+function showPanel(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(id==='sweep') runSweep();
+  if(id==='smith'){document.getElementById('smithSweepFields').style.display=document.getElementById('smithSweep').checked?'block':'none';updateSmith();}
+  if(id==='learn') setLearnLevel(0, document.querySelector('.learn-level-btn'));
+  if(id==='match') calcMatch();
+  if(id==='wave'){updateWaveInfo();if(waveRunning)startWave();}
+}
+
+/* ============================================================
+   PANEL 1: IMPEDANCE MATH
+============================================================ */
+function syncInput(k){
+  const s=document.getElementById(k+'Slider'),n=document.getElementById(k+'Num'),v=document.getElementById(k+'Val');
+  n.value=s.value; if(v)v.textContent=(k==='x'&&s.value>=0?'+':'')+s.value;
+}
+function syncSlider(k){
+  const s=document.getElementById(k+'Slider'),n=document.getElementById(k+'Num'),v=document.getElementById(k+'Val');
+  const val=parseFloat(n.value)||0;
+  s.value=Math.min(Math.max(val,parseFloat(s.min)),parseFloat(s.max));
+  if(v)v.textContent=(k==='x'&&val>=0?'+':'')+val;
+}
+
+function calcImpedance(){
+  const R=parseFloat(document.getElementById('rNum').value)||0;
+  const X=parseFloat(document.getElementById('xNum').value)||0;
+  const Z0=parseFloat(document.getElementById('z0Num').value)||50;
+
+  // Complex Gamma: (ZL-Z0)/(ZL+Z0)
+  const numR=R-Z0, numI=X;
+  const denR=R+Z0, denI=X;
+  const denMag2=denR*denR+denI*denI;
+  const gR=(numR*denR+numI*denI)/denMag2;
+  const gI=(numI*denR-numR*denI)/denMag2;
+  const gamma=Math.sqrt(gR*gR+gI*gI);
+  const angleRad=Math.atan2(gI,gR);
+  const angleDeg=(angleRad*180/Math.PI).toFixed(1);
+
+  const vswr=gamma>=1?999:(1+gamma)/(1-gamma);
+  const rl=gamma<0.0001?999:-20*Math.log10(gamma);
+  const ml=gamma<0.0001?0:-10*Math.log10(1-gamma*gamma);
+  const power=(1-gamma*gamma)*100;
+  const zlMag=Math.sqrt(R*R+X*X);
+
+  // Color coding
+  const gc=gamma<0.1?'good':gamma<0.333?'warn':'bad';
+
+  document.getElementById('gammaVal').textContent=gamma.toFixed(4);
+  document.getElementById('gammaVal').className='metric-val '+gc;
+  document.getElementById('gammaAngle').textContent='∠'+angleDeg+'°';
+  document.getElementById('vswrVal').textContent=vswr>100?'>100':vswr.toFixed(3);
+  document.getElementById('vswrVal').className='metric-val '+(vswr<1.5?'good':vswr<2?'warn':'bad');
+  document.getElementById('rlVal').textContent=rl>99?'∞':rl.toFixed(2)+' dB';
+  document.getElementById('rlVal').className='metric-val '+(rl>20?'good':rl>10?'warn':'bad');
+  document.getElementById('mlVal').textContent=ml.toFixed(3)+' dB';
+  document.getElementById('powerVal').textContent=power.toFixed(1)+'%';
+  document.getElementById('powerVal').className='metric-val '+(power>95?'good':power>75?'warn':'bad');
+  document.getElementById('zlMagVal').textContent=zlMag.toFixed(2)+' Ω';
+
+  // VSWR bar (log scaled)
+  const vbar=Math.min(100, (vswr-1)/9*100);
+  const vbarEl=document.getElementById('vswrBar');
+  vbarEl.style.width=vbar+'%';
+  vbarEl.style.background=vswr<1.5?'#4ade80':vswr<2?'#fbbf24':'#f87171';
+
+  document.getElementById('powerBar').style.width=power.toFixed(1)+'%';
+
+  // Status badge
+  const st=document.getElementById('matchStatus');
+  if(vswr<1.5){st.textContent='GOOD MATCH';st.className='status good';}
+  else if(vswr<2){st.textContent='ACCEPTABLE';st.className='status warn';}
+  else{st.textContent='MISMATCH';st.className='status bad';}
+
+  drawPhasor(R,X,Z0);
+  aiDiagnose(R,X,Z0,gamma,vswr,rl);
+}
+
+function drawPhasor(R,X,Z0){
+  const cv=document.getElementById('phasorCanvas');
+  const ctx=cv.getContext('2d');
+  const W=cv.offsetWidth||500, H=180;
+  cv.width=W; cv.height=H;
+  ctx.clearRect(0,0,W,H);
+
+  const ox=W*0.5, oy=H*0.5, scale=Math.min(W,H)*0.35/Math.max(Math.sqrt(R*R+X*X),Z0,1);
+
+  // Axes
+  ctx.strokeStyle='#27272a'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,oy); ctx.lineTo(W,oy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,0); ctx.lineTo(ox,H); ctx.stroke();
+
+  // Z0 circle
+  ctx.strokeStyle='rgba(34,211,238,0.2)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.arc(ox,oy,Z0*scale,0,2*Math.PI); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ZL vector
+  const ex=ox+R*scale, ey=oy-X*scale;
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(ex,ey); ctx.stroke();
+
+  // Arrowhead
+  const angle=Math.atan2(ey-oy,ex-ox);
+  ctx.fillStyle='#22d3ee';
+  ctx.beginPath();
+  ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-10*Math.cos(angle-0.4),ey-10*Math.sin(angle-0.4));
+  ctx.lineTo(ex-10*Math.cos(angle+0.4),ey-10*Math.sin(angle+0.4));
+  ctx.closePath(); ctx.fill();
+
+  // Z0 dot
+  ctx.fillStyle='rgba(34,211,238,0.4)'; ctx.beginPath(); ctx.arc(ox+Z0*scale,oy,4,0,2*Math.PI); ctx.fill();
+
+  // Labels
+  ctx.fillStyle='#52525b'; ctx.font='10px IBM Plex Mono';
+  ctx.fillText('R',W-25,oy-5);
+  ctx.fillText('jX',ox+5,12);
+  ctx.fillStyle='#22d3ee'; ctx.font='11px IBM Plex Mono';
+  ctx.fillText('ZL='+R+(X>=0?'+j':'-j')+Math.abs(X),ex+6,ey-6);
+  ctx.fillStyle='rgba(34,211,238,0.5)';
+  ctx.fillText('Z₀='+Z0+'Ω',ox+Z0*scale+4,oy+14);
+}
+
+function setPreset(r,x){
+  document.getElementById('rNum').value=r;
+  document.getElementById('rSlider').value=Math.min(r,300);
+  document.getElementById('rVal').textContent=r;
+  document.getElementById('xNum').value=x;
+  document.getElementById('xSlider').value=Math.min(Math.max(x,-200),200);
+  document.getElementById('xVal').textContent=(x>=0?'+':'')+x;
+  calcImpedance();
+}
+
+function aiDiagnose(R,X,Z0,gamma,vswr,rl){
+  const msgs=[];
+  const isInductive=X>5;
+  const isCapacitive=X<-5;
+  const isTuned=Math.abs(X)<5;
+
+  let main='';
+  if(vswr<1.2) main='<strong>System is well-matched.</strong> Γ='+gamma.toFixed(3)+', delivering '+((1-gamma*gamma)*100).toFixed(1)+'% of available power.';
+  else if(vswr<2){
+    main='<strong>Marginal mismatch</strong> detected. ';
+    if(isInductive) main+='Load is inductive (X=+'+X.toFixed(0)+'Ω). ';
+    else if(isCapacitive) main+='Load is capacitive (X='+X.toFixed(0)+'Ω). ';
+    main+='VSWR '+vswr.toFixed(2)+' is acceptable for most applications.';
+  } else {
+    main='<strong>Significant mismatch!</strong> VSWR='+vswr.toFixed(2)+'. Only '+((1-gamma*gamma)*100).toFixed(1)+'% of power reaches the load.';
+  }
+  msgs.push(main);
+
+  if(isInductive && vswr>1.5){
+    const Xc_needed=-X;
+    msgs.push('<strong>Fix:</strong> Add series capacitor to cancel reactance. At 2.4 GHz: C = 1/(2π × 2.4×10⁹ × '+Math.abs(Xc_needed).toFixed(0)+') ≈ '+(1e12/(2*Math.PI*2.4e9*Math.abs(Xc_needed))).toFixed(1)+' pF');
+  }
+  if(isCapacitive && vswr>1.5){
+    const Xl_needed=-X;
+    msgs.push('<strong>Fix:</strong> Add series inductor to cancel reactance. At 2.4 GHz: L = '+Math.abs(Xl_needed).toFixed(0)+'/(2π × 2.4×10⁹) ≈ '+(Math.abs(Xl_needed)/(2*Math.PI*2.4e9)*1e9).toFixed(2)+' nH');
+  }
+  if(R!==Z0 && isTuned){
+    msgs.push('<strong>Resistive mismatch:</strong> RL='+R+'Ω vs Z₀='+Z0+'Ω. Use an L-network. Go to the Matching tab →');
+  }
+
+  const container=document.getElementById('aiMessages');
+  container.innerHTML=msgs.map(m=>'<div class="ai-msg"><div class="ai-label">RF Assistant</div>'+m+'</div>').join('');
+}
+
+/* ============================================================
+   PANEL 2: FREQUENCY SWEEP
+============================================================ */
+function runSweep(){
+  const type=document.getElementById('sweepType').value;
+  const R=parseFloat(document.getElementById('sRSlider').value);
+  const L=parseFloat(document.getElementById('sLSlider').value)*1e-9;
+  const C=parseFloat(document.getElementById('sCSlider').value)*1e-12;
+  const Z0=50;
+  const fmax=parseFloat(document.getElementById('freqRange').value)*1e6;
+  const N=200;
+
+  // Show/hide L/C fields
+  document.getElementById('fieldL').style.display=(type==='RC'?'none':'block');
+  document.getElementById('fieldC').style.display=(type==='RL'?'none':'block');
+
+  const freqs=[],vswrArr=[],rlArr=[],gammaArr=[];
+  let minVswr=999,minVswrF=0,resonanceF=0,bwLow=0,bwHigh=0,inBW=false;
+
+  for(let i=0;i<=N;i++){
+    const f=fmax*i/N;
+    freqs.push(f/1e6);
+    let Zr=R,Zi=0;
+    const w=2*Math.PI*f;
+    if(w>0){
+      if(type==='RL'||type==='RLC') Zi+=w*L;
+      if(type==='RC'||type==='RLC') Zi-=1/(w*C);
+      if(type==='LC'){Zr=0;Zi=w*L-1/(w*C);}
+    }
+    const nR=Zr-Z0,nI=Zi;
+    const dR=Zr+Z0,dI=Zi;
+    const d2=dR*dR+dI*dI;
+    const gR=(nR*dR+nI*dI)/d2;
+    const gI=(nI*dR-nR*dI)/d2;
+    const g=Math.sqrt(gR*gR+gI*gI);
+    const v=g>=1?999:(1+g)/(1-g);
+    const rl2=g<1e-6?99:-20*Math.log10(g);
+
+    vswrArr.push(Math.min(v,10));
+    rlArr.push(Math.min(rl2,40));
+    gammaArr.push(g);
+
+    if(v<minVswr){minVswr=v;minVswrF=f;}
+    if(i>0&&Math.abs(Zi)<Math.abs(prevZi)&&Zi*prevZi<0) resonanceF=f;
+    var prevZi=Zi;
+
+    if(v<=2&&!inBW){bwLow=f;inBW=true;}
+    if(v>2&&inBW){bwHigh=f;inBW=false;}
+  }
+  if(inBW) bwHigh=fmax;
+  const bw=bwHigh-bwLow;
+
+  const chartData={labels:freqs,datasets:[{
+    data:vswrArr,borderColor:'#22d3ee',borderWidth:1.5,
+    pointRadius:0,fill:true,backgroundColor:'rgba(34,211,238,0.05)',tension:0.3
+  }]};
+
+  // VSWR=2 reference line
+  const vswr2Line={label:'VSWR=2',data:freqs.map(()=>2),borderColor:'rgba(251,191,36,0.4)',borderWidth:1,borderDash:[4,4],pointRadius:0};
+  chartData.datasets.push(vswr2Line);
+
+  buildChart('vswrChart', freqs, vswrArr, '#22d3ee', 'VSWR', 0, 6);
+  buildChart('rlChart', freqs, rlArr, '#a78bfa', 'Return Loss (dB)', 0, 40);
+  buildChart('gammaChart', freqs, gammaArr.map(g=>+g.toFixed(4)), '#4ade80', '|Γ|', 0, 1);
+
+  // Summary chips
+  document.getElementById('resChip').textContent='Resonance: '+(resonanceF>0?(resonanceF/1e6).toFixed(1)+' MHz':'N/A');
+  document.getElementById('resChip').className='sweep-chip'+(resonanceF>0?' highlight':'');
+  document.getElementById('bwChip').textContent='BW (VSWR<2): '+(bw>0?(bw/1e6).toFixed(1)+' MHz':'N/A');
+  document.getElementById('minVswrChip').textContent='Min VSWR: '+minVswr.toFixed(3)+' @ '+(minVswrF/1e6).toFixed(1)+'MHz';
+  document.getElementById('minVswrChip').className='sweep-chip'+(minVswr<2?' highlight':'');
+
+  let sweepTxt='';
+  if(resonanceF>0) sweepTxt+='Resonance at <strong>'+(resonanceF/1e6).toFixed(1)+' MHz</strong> — reactive parts cancel here. ';
+  if(bw>0) sweepTxt+='Usable bandwidth '+(bwLow/1e6).toFixed(0)+'–'+(bwHigh/1e6).toFixed(0)+' MHz. ';
+  if(minVswr<2) sweepTxt+='Minimum VSWR '+minVswr.toFixed(2)+' — acceptable match at this frequency.';
+  else sweepTxt+='VSWR remains above 2 across the sweep. Consider an impedance matching network.';
+  document.getElementById('sweepAI').innerHTML=sweepTxt;
+}
+
+function buildChart(id,labels,data,color,ylabel,ymin,ymax){
+  const ctx=document.getElementById(id);
+  if(!ctx) return;
+  // destroy old
+  if(ctx._chart) ctx._chart.destroy();
+  ctx._chart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{data,borderColor:color,borderWidth:1.5,pointRadius:0,
+      fill:true,backgroundColor:color.replace('#','rgba(').replace(/^rgba\(([^)]+)\)/,'rgba($1, 0.07)').replace('rgba(','rgba(').replace(/,0\.07\)$/,', 0.07)'),
+      tension:0.3}]},
+    options:{...CHART_DEFAULTS,plugins:{...CHART_DEFAULTS.plugins,
+      tooltip:{...CHART_DEFAULTS.plugins.tooltip,callbacks:{title:i=>i[0].label+' MHz',label:i=>ylabel+': '+i.raw}}},
+      scales:{...CHART_DEFAULTS.scales,y:{...CHART_DEFAULTS.scales.y,min:ymin,max:ymax}}}
+  });
+}
+
+/* ============================================================
+   PANEL 3: WAVE SIMULATOR
+============================================================ */
+function updateWaveInfo(){
+  const gamma=parseFloat(document.getElementById('wGamma').value)/100;
+  const freq=parseFloat(document.getElementById('wFreq').value)*1e6;
+  const lambda=(3e8/freq);
+  const vswr=(1+gamma)/(1-gamma+1e-10);
+  const fwdPow=100,refPow=gamma*gamma*100;
+
+  document.getElementById('wLambda').textContent=lambda>=1?(lambda.toFixed(2)+' m'):(lambda*100).toFixed(1)+' cm';
+  document.getElementById('wVswr').textContent=vswr.toFixed(2);
+  document.getElementById('wFwdPow').textContent=fwdPow.toFixed(0)+'%';
+  document.getElementById('wRefPow').textContent=refPow.toFixed(1)+'%';
+  drawWave();
+}
+
+function drawWave(){
+  const cv=document.getElementById('waveCanvas');
+  const ctx=cv.getContext('2d');
+  const W=cv.offsetWidth||600;
+  cv.width=W; cv.height=400;
+  ctx.clearRect(0,0,W,400);
+
+  const gamma=parseFloat(document.getElementById('wGamma').value)/100;
+  const phase=wavePhase;
+  const userPhase=parseFloat(document.getElementById('wPhase').value)*Math.PI/180;
+  const ox=40, ow=W-80, midY=200, amp=80;
+
+  // Background grid
+  ctx.strokeStyle='rgba(39,39,42,0.8)'; ctx.lineWidth=1;
+  for(let y=0;y<=400;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  for(let x=ox;x<=ox+ow;x+=ow/8){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,400);ctx.stroke();}
+
+  // Axis
+  ctx.strokeStyle='#3f3f46'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(ox,midY); ctx.lineTo(ox+ow,midY); ctx.stroke();
+
+  // Labels
+  ctx.fillStyle='#52525b'; ctx.font='10px IBM Plex Mono'; ctx.textAlign='center';
+  ctx.fillText('0',ox,midY+20); ctx.fillText('λ/2',ox+ow*0.5,midY+20); ctx.fillText('λ',ox+ow,midY+20);
+  ctx.fillText('Source',ox+ow*0.05,18); ctx.fillText('Load',ox+ow*0.95,18);
+
+  // Transmission line
+  ctx.strokeStyle='#27272a'; ctx.lineWidth=3; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(ox,midY-2); ctx.lineTo(ox+ow,midY-2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,midY+2); ctx.lineTo(ox+ow,midY+2); ctx.stroke();
+
+  const N=400;
+  // Forward wave (cyan)
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.beginPath();
+  for(let i=0;i<=N;i++){
+    const x=ox+ow*i/N;
+    const pos=i/N;
+    const y=midY-amp*Math.sin(2*Math.PI*(pos - phase*0.02) + userPhase);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Reflected wave (orange)
+  ctx.strokeStyle='#fb923c'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let i=0;i<=N;i++){
+    const x=ox+ow*i/N;
+    const pos=i/N;
+    const y=midY-amp*gamma*Math.sin(2*Math.PI*(1-pos + phase*0.02) + userPhase);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Standing wave envelope (green dashed)
+  ctx.strokeStyle='#4ade80'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+  const envTop=[], envBot=[];
+  for(let i=0;i<=N;i++){
+    const pos=i/N;
+    const fwd=amp*Math.sin(2*Math.PI*pos+userPhase);
+    const ref=amp*gamma*Math.sin(2*Math.PI*(1-pos)+userPhase);
+    const sw=fwd+ref;
+    envTop.push(midY-Math.abs(sw)); envBot.push(midY+Math.abs(sw));
+  }
+  ctx.beginPath();
+  for(let i=0;i<=N;i++){const x=ox+ow*i/N; i===0?ctx.moveTo(x,envTop[i]):ctx.lineTo(x,envTop[i]);}
+  ctx.stroke();
+  ctx.beginPath();
+  for(let i=0;i<=N;i++){const x=ox+ow*i/N; i===0?ctx.moveTo(x,envBot[i]):ctx.lineTo(x,envBot[i]);}
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Nodes & antinodes
+  for(let i=0;i<4;i++){
+    const xNode=ox+ow*(i*0.5+0.25);
+    const xAnti=ox+ow*(i*0.5);
+    // Node
+    ctx.fillStyle='rgba(248,113,113,0.7)';
+    ctx.beginPath(); ctx.arc(xNode,midY,4,0,2*Math.PI); ctx.fill();
+    // Antinode
+    ctx.fillStyle='rgba(34,211,238,0.7)';
+    ctx.beginPath(); ctx.arc(xAnti,midY-amp*(1+gamma),4,0,2*Math.PI); ctx.fill();
+    ctx.beginPath(); ctx.arc(xAnti,midY+amp*(1+gamma),4,0,2*Math.PI); ctx.fill();
+  }
+}
+
+function toggleWave(){
+  if(waveRunning){
+    cancelAnimationFrame(waveAnimId);
+    waveRunning=false;
+    document.getElementById('wavePlayBtn').textContent='▶ PLAY';
+  } else {
+    waveRunning=true;
+    document.getElementById('wavePlayBtn').textContent='⏸ PAUSE';
+    startWave();
+  }
+}
+
+function startWave(){
+  function frame(){
+    wavePhase+=0.3;
+    drawWave();
+    if(waveRunning) waveAnimId=requestAnimationFrame(frame);
+  }
+  waveAnimId=requestAnimationFrame(frame);
+}
+
+function resetWave(){
+  wavePhase=0;
+  drawWave();
+}
+
+/* ============================================================
+   PANEL 4: MATCHING CIRCUIT
+============================================================ */
+function calcMatch(){
+  const RL=parseFloat(document.getElementById('mRL').value)||75;
+  const XL=parseFloat(document.getElementById('mXL').value)||0;
+  const Z0=parseFloat(document.getElementById('mZ0').value)||50;
+  const f=parseFloat(document.getElementById('mFreq').value)*1e6||2.4e9;
+  const type=document.getElementById('mType').value;
+  const w=2*Math.PI*f;
+
+  // L-network synthesis
+  // For RL > Z0: Q = sqrt(RL/Z0 - 1)
+  // For RL < Z0: Q = sqrt(Z0/RL - 1)
+  const Rhigh=Math.max(RL,Z0), Rlow=Math.min(RL,Z0);
+  const Q=Math.sqrt(Rhigh/Rlow-1);
+  let Xs,Xp,Cs,Ls,Cp,Lp;
+  const matchHigh=(RL>Z0);
+
+  if(type==='LP'){
+    // Series element toward high R, shunt element toward low R
+    Xs=Q*Rlow; // series X
+    Xp=Rhigh/Q; // parallel X
+    if(matchHigh){
+      // series L, shunt C (LP characteristic)
+      Ls=Xs/w; Cp=1/(w*Xp);
+      document.getElementById('matchComponents').innerHTML=
+        '<div class="comp-row"><span class="comp-name">Series Inductor (Ls)</span><span class="comp-val">'+(Ls*1e9).toFixed(2)+' nH</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Shunt Capacitor (Cp)</span><span class="comp-val">'+(Cp*1e12).toFixed(2)+' pF</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Bandwidth (~1/Q)</span><span class="comp-val">'+(f/Q/1e6).toFixed(1)+' MHz</span></div>';
+      drawCircuit('LP-series-L',Ls,Cp,f);
+    } else {
+      Cs=1/(w*Xs); Lp=Xp/w;
+      document.getElementById('matchComponents').innerHTML=
+        '<div class="comp-row"><span class="comp-name">Series Capacitor (Cs)</span><span class="comp-val">'+(Cs*1e12).toFixed(2)+' pF</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Shunt Inductor (Lp)</span><span class="comp-val">'+(Lp*1e9).toFixed(2)+' nH</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>';
+      drawCircuit('LP-series-C',Cs,Lp,f);
+    }
+  } else {
+    // HP: series C, shunt L
+    Xs=Q*Rlow; Xp=Rhigh/Q;
+    if(matchHigh){
+      Cs=1/(w*Xs); Lp=Xp/w;
+      document.getElementById('matchComponents').innerHTML=
+        '<div class="comp-row"><span class="comp-name">Series Capacitor (Cs)</span><span class="comp-val">'+(Cs*1e12).toFixed(2)+' pF</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Shunt Inductor (Lp)</span><span class="comp-val">'+(Lp*1e9).toFixed(2)+' nH</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Bandwidth (~1/Q)</span><span class="comp-val">'+(f/Q/1e6).toFixed(1)+' MHz</span></div>';
+      drawCircuit('HP-series-C',Cs,Lp,f);
+    } else {
+      Ls=Xs/w; Cp=1/(w*Xp);
+      document.getElementById('matchComponents').innerHTML=
+        '<div class="comp-row"><span class="comp-name">Series Inductor (Ls)</span><span class="comp-val">'+(Ls*1e9).toFixed(2)+' nH</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Shunt Capacitor (Cp)</span><span class="comp-val">'+(Cp*1e12).toFixed(2)+' pF</span></div>'+
+        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>';
+      drawCircuit('HP-series-L',Ls,Cp,f);
+    }
+  }
+
+  // Before/After comparison chart
+  const freqs=[],beforeArr=[],afterArr=[];
+  for(let i=1;i<=200;i++){
+    const fi=f*0.2+f*1.8*i/200;
+    freqs.push((fi/1e6).toFixed(0));
+    const wi=2*Math.PI*fi;
+    // Before: just RL+jXL vs Z0
+    const bR=RL-Z0,bI=XL,bdR=RL+Z0,bdI=XL;
+    const bd2=bdR*bdR+bdI*bdI;
+    const bgR=(bR*bdR+bI*bdI)/bd2,bgI=(bI*bdR-bR*bdI)/bd2;
+    const bg=Math.sqrt(bgR*bgR+bgI*bgI);
+    beforeArr.push(Math.min((1+bg)/(1-bg+1e-9),10));
+    // After: matched network transforms ZL
+    // Simplified: at design freq VSWR=1, rolls off with Q
+    const deltaf=(fi-f)/f;
+    const vaft=1+2*Q*Q*deltaf*deltaf;
+    afterArr.push(Math.min(vaft,10));
+  }
+
+  const mctx=document.getElementById('matchChart');
+  if(mctx._chart) mctx._chart.destroy();
+  mctx._chart=new Chart(mctx,{
+    type:'line',
+    data:{labels:freqs,datasets:[
+      {label:'Before',data:beforeArr,borderColor:'#f87171',borderWidth:1.5,pointRadius:0,tension:0.3,borderDash:[4,4]},
+      {label:'After',data:afterArr,borderColor:'#4ade80',borderWidth:1.5,pointRadius:0,tension:0.3}
+    ]},
+    options:{...CHART_DEFAULTS,plugins:{...CHART_DEFAULTS.plugins,legend:{display:true,labels:{color:'#a1a1aa',font:{family:"'IBM Plex Mono',monospace",size:10}}}},
+      scales:{...CHART_DEFAULTS.scales,y:{...CHART_DEFAULTS.scales.y,min:1,max:6,title:{display:true,text:'VSWR',color:'#52525b',font:{family:"'IBM Plex Mono',monospace",size:10}}}}}
+  });
+
+  // AI
+  document.getElementById('matchAI').innerHTML=
+    'L-network designed for <strong>'+type+'</strong> response at <strong>'+(f/1e6).toFixed(0)+' MHz</strong>. '+
+    'Q factor = '+Q.toFixed(2)+' provides ~'+(f/Q/1e6).toFixed(0)+' MHz bandwidth. '+
+    (Q>5?'High Q — narrow bandwidth, good selectivity but sensitive to component tolerance.':'Moderate Q — good bandwidth with reasonable component tolerances.');
+}
+
+function drawCircuit(type, val1, val2, f){
+  const el=document.getElementById('circuitDiagram');
+  const w=Math.min(el.offsetWidth-32,420);
+  const h=120;
+  const isSeriesL=type.includes('series-L')&&!type.includes('HP')||type.includes('HP-series-L');
+  const isSeriesC=type.includes('series-C');
+
+  const c1label=val1?(type.includes('series-L')?'L='+(val1*1e9).toFixed(1)+'nH':'C='+(val1*1e12).toFixed(1)+'pF'):'';
+  const c2label=val2?(type.includes('LP')&&type.includes('series-L')?'C='+(val2*1e12).toFixed(1)+'pF':'L='+(val2*1e9).toFixed(1)+'nH'):'';
+
+  el.innerHTML=`<svg viewBox="0 0 420 120" width="${w}" height="${h}" style="display:block;margin:0 auto">
+    <defs><marker id="ca" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#22d3ee" stroke-width="2"/></marker></defs>
+    <!-- Source -->
+    <rect x="8" y="45" width="40" height="30" rx="4" fill="#18181b" stroke="#3f3f46" stroke-width="1"/>
+    <text x="28" y="63" text-anchor="middle" fill="#52525b" font-size="9" font-family="IBM Plex Mono">Z₀</text>
+    <!-- Wire from source -->
+    <line x1="48" y1="60" x2="110" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
+    <!-- Series element box -->
+    <rect x="110" y="44" width="60" height="32" rx="4" fill="#18181b" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="140" y="56" text-anchor="middle" fill="#22d3ee" font-size="8" font-family="IBM Plex Mono">${isSeriesL?'L':'C'}</text>
+    <text x="140" y="68" text-anchor="middle" fill="#a1a1aa" font-size="7.5" font-family="IBM Plex Mono">${c1label}</text>
+    <!-- Wire to shunt -->
+    <line x1="170" y1="60" x2="250" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
+    <!-- Shunt element -->
+    <line x1="250" y1="60" x2="250" y2="40" stroke="#22d3ee" stroke-width="1.5"/>
+    <rect x="222" y="20" width="56" height="24" rx="4" fill="#18181b" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="250" y="30" text-anchor="middle" fill="#a78bfa" font-size="8" font-family="IBM Plex Mono">${isSeriesL?'C':'L'}</text>
+    <text x="250" y="40" text-anchor="middle" fill="#a1a1aa" font-size="7.5" font-family="IBM Plex Mono">${c2label}</text>
+    <line x1="250" y1="60" x2="250" y2="80" stroke="#22d3ee" stroke-width="1.5"/>
+    <line x1="222" y1="90" x2="278" y2="90" stroke="#52525b" stroke-width="1"/>
+    <line x1="232" y1="95" x2="268" y2="95" stroke="#52525b" stroke-width="1"/>
+    <line x1="243" y1="100" x2="257" y2="100" stroke="#52525b" stroke-width="1"/>
+    <!-- Wire to load -->
+    <line x1="250" y1="60" x2="310" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
+    <!-- Load -->
+    <rect x="310" y="44" width="60" height="32" rx="4" fill="#18181b" stroke="#fb923c" stroke-width="1.5"/>
+    <text x="340" y="56" text-anchor="middle" fill="#fb923c" font-size="9" font-family="IBM Plex Mono">ZL</text>
+    <text x="340" y="68" text-anchor="middle" fill="#a1a1aa" font-size="7.5" font-family="IBM Plex Mono">Load</text>
+    <!-- Ground -->
+    <line x1="8" y1="75" x2="8" y2="90" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="1" y1="90" x2="15" y2="90" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="3" y1="95" x2="13" y2="95" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="5" y1="100" x2="11" y2="100" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="370" y1="75" x2="370" y2="90" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="363" y1="90" x2="377" y2="90" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="365" y1="95" x2="375" y2="95" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="367" y1="100" x2="373" y2="100" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="370" y1="60" x2="370" y2="76" stroke="#22d3ee" stroke-width="1.5"/>
+    <!-- Label -->
+    <text x="210" y="115" text-anchor="middle" fill="#52525b" font-size="8" font-family="IBM Plex Mono">L-Network ${type} @ ${(f/1e6).toFixed(0)}MHz</text>
+  </svg>`;
+}
+
+/* ============================================================
+   PANEL 5: SMITH CHART
+============================================================ */
+document.getElementById('smithSweep').addEventListener('change',function(){
+  document.getElementById('smithSweepFields').style.display=this.checked?'block':'none';
+  updateSmith();
+});
+
+function updateSmith(){
+  const r=parseFloat(document.getElementById('sNr').value)/100;
+  const x=parseFloat(document.getElementById('sNx').value)/100;
+  const doSweep=document.getElementById('smithSweep').checked;
+
+  // Gamma from normalized z
+  const denom=(r+1)*(r+1)+x*x;
+  const gR=((r-1)*(r+1)+x*x)/denom;
+  const gI=(2*x)/denom;
+  const gamma=Math.sqrt(gR*gR+gI*gI);
+  const vswr=gamma>=1?999:(1+gamma)/(1-gamma);
+  const rl=gamma<1e-6?99:-20*Math.log10(gamma);
+
+  document.getElementById('smithZ').textContent=r.toFixed(2)+(x>=0?'+j':'-j')+Math.abs(x).toFixed(2);
+  document.getElementById('smithGamma').textContent=gamma.toFixed(4);
+  document.getElementById('smithVswr').textContent=vswr>100?'>100':vswr.toFixed(3);
+  document.getElementById('smithRL').textContent=(rl>99?'∞':rl.toFixed(1))+' dB';
+
+  let sweepPoints=null;
+  if(doSweep){
+    sweepPoints=[];
+    const L=parseFloat(document.getElementById('smithL').value)*1e-9;
+    const C=parseFloat(document.getElementById('smithC').value)*1e-12;
+    for(let i=1;i<=200;i++){
+      const f=100e6+i*50e6;
+      const w=2*Math.PI*f;
+      const zi_r=r, zi_x=w*L-1/(w*C);
+      const dd=(zi_r+1)*(zi_r+1)+zi_x*zi_x;
+      const gRi=((zi_r-1)*(zi_r+1)+zi_x*zi_x)/dd;
+      const gIi=(2*zi_x)/dd;
+      sweepPoints.push({gR:gRi,gI:gIi,f:f});
+    }
+  }
+  drawSmith(gR,gI,sweepPoints);
+}
+
+function drawSmith(gR,gI,sweepPoints){
+  const cv=document.getElementById('smithCanvas');
+  const ctx=cv.getContext('2d');
+  const S=Math.min(cv.offsetWidth,cv.offsetHeight)||500;
+  cv.width=S; cv.height=S;
+  const cx=S/2, cy=S/2, R=S*0.44;
+
+  ctx.clearRect(0,0,S,S);
+
+  // Background circle
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI);
+  ctx.strokeStyle='#3f3f46'; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle='rgba(17,17,19,0.7)'; ctx.fill();
+
+  // Constant resistance circles: r=0,0.5,1,2,5
+  const rcircs=[0,0.2,0.5,1,2,5];
+  rcircs.forEach(r=>{
+    const cr=R/(1+r), cnx=cx+R-cr;
+    ctx.beginPath(); ctx.arc(cnx,cy,cr,0,2*Math.PI);
+    ctx.strokeStyle=r===1?'rgba(34,211,238,0.3)':'rgba(63,63,70,0.6)';
+    ctx.lineWidth=r===1?1.5:0.7; ctx.stroke();
+    if(r>0){ctx.fillStyle='#52525b';ctx.font='9px IBM Plex Mono';ctx.fillText('r='+r,cnx+cr-16,cy+9);}
+  });
+
+  // Constant reactance arcs: x=±0.5,±1,±2,±5
+  const xcircs=[0.5,1,2,5];
+  xcircs.forEach(x=>{
+    [1,-1].forEach(sign=>{
+      const cr=R/x, cny=cy-sign*R/x;
+      ctx.beginPath();
+      ctx.arc(cx+R,cny,cr,0,2*Math.PI);
+      ctx.strokeStyle='rgba(63,63,70,0.5)'; ctx.lineWidth=0.7;
+      ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.clip();
+      ctx.stroke(); ctx.restore();
+    });
+  });
+
+  // Real axis
+  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy);
+  ctx.strokeStyle='#3f3f46'; ctx.lineWidth=0.7; ctx.stroke();
+
+  // VSWR circles
+  [0.333,0.2,0.1].forEach((g,i)=>{
+    ctx.beginPath(); ctx.arc(cx,cy,R*g,0,2*Math.PI);
+    ctx.strokeStyle=['rgba(248,113,113,0.2)','rgba(251,191,36,0.2)','rgba(74,222,128,0.2)'][i];
+    ctx.lineWidth=1; ctx.setLineDash([3,4]); ctx.stroke(); ctx.setLineDash([]);
+  });
+
+  // Sweep trace
+  if(sweepPoints&&sweepPoints.length){
+    ctx.beginPath();
+    sweepPoints.forEach((p,i)=>{
+      const px=cx+p.gR*R, py=cy-p.gI*R;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    });
+    ctx.strokeStyle='rgba(167,139,250,0.7)'; ctx.lineWidth=1.5; ctx.stroke();
+    // Dots at key frequencies
+    [0,50,100,150,199].forEach(i=>{
+      if(sweepPoints[i]){
+        const p=sweepPoints[i];
+        ctx.beginPath(); ctx.arc(cx+p.gR*R,cy-p.gI*R,3,0,2*Math.PI);
+        ctx.fillStyle='#a78bfa'; ctx.fill();
+      }
+    });
+  }
+
+  // Current point
+  const px=cx+gR*R, py=cy-gI*R;
+
+  // Cross hairs (faint)
+  ctx.strokeStyle='rgba(34,211,238,0.15)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(px,cy-R); ctx.lineTo(px,cy+R); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-R,py); ctx.lineTo(cx+R,py); ctx.stroke();
+
+  // Point ring
+  ctx.beginPath(); ctx.arc(px,py,8,0,2*Math.PI);
+  ctx.strokeStyle='rgba(34,211,238,0.4)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(px,py,4,0,2*Math.PI);
+  ctx.fillStyle='#22d3ee'; ctx.fill();
+
+  // Center dot
+  ctx.beginPath(); ctx.arc(cx,cy,3,0,2*Math.PI);
+  ctx.fillStyle='#52525b'; ctx.fill();
+
+  // Labels
+  ctx.fillStyle='#52525b'; ctx.font='10px IBM Plex Mono'; ctx.textAlign='center';
+  ctx.fillText('Γ=0 (matched)',cx,cy+R+16);
+  ctx.fillText('Short (Γ=-1)',cx-R,cy+12);
+  ctx.fillText('Open (Γ=+1)',cx+R,cy+12);
+}
+
+/* ============================================================
+   PANEL 6: LEARNING CONTENT
+============================================================ */
+const learnData=[
+  {title:'Beginner',content:`
+<h3>What is Impedance?</h3>
+Impedance (Z) is the total opposition a circuit offers to AC current — like resistance, but for signals. It has two parts: a real part (resistance R) and an imaginary part (reactance X).
+<div class="formula-box">Z = R + jX  (Ohms)</div>
+<h3>What is Impedance Matching?</h3>
+When a signal source and load have the same impedance, maximum power flows between them. Mismatch causes reflections — power bounces back instead of being delivered.
+<div class="callout">💡 In RF systems, the "standard" impedance is 50Ω — this is why all coax cables, antennas, and equipment use 50Ω.</div>
+<h3>What is Reflection?</h3>
+When a signal hits a mismatch, part of it reflects back toward the source. The reflection coefficient Γ (Gamma) tells us how much:
+<div class="formula-box">Γ = (ZL − Z₀) / (ZL + Z₀)</div>
+If ZL = Z₀: Γ = 0 → no reflection, perfect match.<br>
+If ZL = 0 (short): Γ = -1 → total reflection.<br>
+If ZL = ∞ (open): Γ = +1 → total reflection.
+<h3>What is VSWR?</h3>
+VSWR (Voltage Standing Wave Ratio) is a way to express how bad a mismatch is. VSWR = 1:1 is perfect. VSWR = 2:1 means ~11% of power is reflected.
+<div class="formula-box">VSWR = (1 + |Γ|) / (1 − |Γ|)</div>`},
+  {title:'Intermediate',content:`
+<h3>Return Loss</h3>
+Return Loss expresses reflected power in dB. Higher = better (less reflection). >20 dB is excellent.
+<div class="formula-box">RL = −20 × log₁₀(|Γ|)  [dB]</div>
+<table style="width:100%;margin-top:8px;font-size:11px;border-collapse:collapse">
+<tr><td style="color:var(--t3);padding:4px 0">RL > 20 dB</td><td style="color:#4ade80">Excellent (&lt;1% power reflected)</td></tr>
+<tr><td style="color:var(--t3);padding:4px 0">RL 10–20 dB</td><td style="color:#fbbf24">Acceptable (1–10% reflected)</td></tr>
+<tr><td style="color:var(--t3);padding:4px 0">RL &lt; 10 dB</td><td style="color:#f87171">Poor (&gt;10% reflected)</td></tr>
+</table>
+<h3>Inductive vs Capacitive Loads</h3>
+A load with positive X (inductive) stores energy in a magnetic field. Negative X (capacitive) stores it in an electric field. The reactance changes with frequency:
+<div class="formula-box">XL = 2πfL  (rises with frequency)<br>XC = 1/(2πfC)  (falls with frequency)</div>
+<h3>Resonance</h3>
+When XL = XC, they cancel out and the circuit is purely resistive. This is the resonant frequency:
+<div class="formula-box">f₀ = 1 / (2π√(LC))</div>
+<div class="callout">💡 Antenna design usually targets resonance — you want XL = XC at your operating frequency so the antenna looks purely resistive to the feed line.</div>
+<h3>Power and Mismatch Loss</h3>
+<div class="formula-box">P_delivered = (1 − |Γ|²) × P_incident</div>
+Mismatch loss in dB:
+<div class="formula-box">ML = −10 × log₁₀(1 − |Γ|²)</div>`},
+  {title:'Advanced',content:`
+<h3>L-Network Matching Theory</h3>
+An L-network uses two reactive components to transform one impedance to another. The key design parameter is the Q factor:
+<div class="formula-box">Q = √(R_high / R_low − 1)</div>
+For Z₀=50Ω and RL=200Ω: Q = √(200/50 − 1) = √3 ≈ 1.73
+<h3>Network Topology</h3>
+The position of series/shunt elements determines LP or HP response:
+<ul style="margin:8px 0 8px 16px;font-size:12px;line-height:2;color:var(--t2)">
+<li>Series L + Shunt C → Low-Pass</li>
+<li>Series C + Shunt L → High-Pass</li>
+<li>Series element goes on the high-R side</li>
+<li>Shunt element goes on the low-R side</li>
+</ul>
+<h3>Smith Chart Navigation</h3>
+On the Smith Chart, normalized impedance z = Z/Z₀ maps to a reflection coefficient plane:
+<div class="formula-box">Γ = (z − 1) / (z + 1)</div>
+<ul style="margin:8px 0 8px 16px;font-size:12px;line-height:2;color:var(--t2)">
+<li>Center (0+j0) = perfect match</li>
+<li>Left edge = short circuit</li>
+<li>Right edge = open circuit</li>
+<li>Moving clockwise = adding series C or shunt L</li>
+<li>Moving counterclockwise = adding series L or shunt C</li>
+</ul>
+<div class="callout">💡 Adding a series element moves you along a constant-R circle. Adding a shunt element moves you along a constant-G (conductance) circle.</div>
+<h3>Transmission Line Stubs</h3>
+An open or shorted transmission line stub can create any reactance value. At λ/4, a shorted stub looks like an open circuit (and vice versa) — useful for filter design without lumped components.
+<div class="formula-box">Z_in(shorted) = jZ₀ × tan(βl)<br>Z_in(open) = −jZ₀ × cot(βl)</div>`}
+];
+
+function setLearnLevel(idx,btn){
+  document.querySelectorAll('.learn-level-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('learnContent').innerHTML=learnData[idx].content;
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+window.addEventListener('load',()=>{
+  calcImpedance();
+  setLearnLevel(0, document.querySelector('.learn-level-btn'));
+  updateWaveInfo();
+  updateSmith();
+  runSweep();
+  calcMatch();
+  // Redraw on resize
+  window.addEventListener('resize',()=>{
+    calcImpedance();
+    updateSmith();
+    drawWave();
+  });
+});
+</script>
+</body>
+</html>
