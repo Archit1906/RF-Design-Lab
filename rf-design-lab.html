@@ -256,14 +256,30 @@ select:focus{border-color:var(--acc-border)}
 
       <!-- PHASOR CANVAS -->
       <div class="card">
-        <div class="card-title">Impedance Phasor</div>
-        <canvas id="phasorCanvas" width="500" height="180" style="width:100%;border-radius:4px"></canvas>
+        <div class="card-title">
+          Impedance Phasor
+          <span style="margin-left:auto;font-size:9px;color:var(--t3);letter-spacing:.05em;font-weight:400">DRAG THE POINT</span>
+        </div>
+        <canvas id="phasorCanvas" width="500" height="260" style="width:100%;border-radius:4px;cursor:crosshair"></canvas>
+        <!-- A/B compare bar -->
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <button class="btn" id="abLockBtn" onclick="abLock()" style="font-size:10px;padding:5px 12px">LOCK REF A</button>
+          <div id="abDisplay" style="font-size:10px;color:var(--t3);flex:1"></div>
+          <button class="btn" onclick="clearHistory()" style="font-size:10px;padding:5px 10px">CLR</button>
+        </div>
+        <!-- Freq-aware component hint -->
+        <div id="compHint" style="margin-top:8px;font-size:10px;color:var(--t3);background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 10px;display:none"></div>
       </div>
     </div>
 
     <!-- AI CARD -->
     <div class="card">
       <div class="card-title">AI Diagnosis</div>
+      <!-- Frequency input for component reverse-engineering -->
+      <div class="field" style="margin-bottom:12px">
+        <div class="field-label">Freq for component calc (MHz) <span id="diagFreqVal">2400</span></div>
+        <input type="range" id="diagFreq" min="1" max="6000" value="2400" oninput="document.getElementById('diagFreqVal').textContent=this.value;calcImpedance()">
+      </div>
       <div class="ai-messages" id="aiMessages">
         <div class="ai-msg">
           <div class="ai-label">RF Assistant</div>
@@ -334,17 +350,47 @@ select:focus{border-color:var(--acc-border)}
     </div>
 
     <div style="display:flex;flex-direction:column;gap:16px">
+      <!-- Sweep controls row -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn" onclick="saveSweep()" style="font-size:10px;padding:5px 12px">+ SAVE SWEEP</button>
+        <button class="btn" onclick="clearSweeps()" style="font-size:10px;padding:5px 10px">CLR SWEEPS</button>
+        <div style="font-size:10px;color:var(--t3);flex:1" id="sweepSaveInfo"></div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--t2)">
+          <span>Marker:</span>
+          <input type="range" id="freqMarker" min="0" max="100" value="50" step="1"
+            oninput="updateMarker(this.value)" style="width:100px">
+          <span id="freqMarkerLabel" style="color:var(--acc);min-width:60px">— MHz</span>
+        </div>
+      </div>
       <div class="card">
-        <div class="card-title">VSWR vs Frequency</div>
-        <div class="chart-wrap"><canvas id="vswrChart"></canvas></div>
+        <div class="card-title">VSWR vs Frequency
+          <span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:400">CLICK TO PIN</span>
+        </div>
+        <div class="chart-wrap" style="position:relative">
+          <canvas id="vswrChart"></canvas>
+          <canvas id="markerOverlay1" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+          <canvas id="pinOverlay1" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">Return Loss vs Frequency</div>
-        <div class="chart-wrap"><canvas id="rlChart"></canvas></div>
+        <div class="chart-wrap" style="position:relative">
+          <canvas id="rlChart"></canvas>
+          <canvas id="markerOverlay2" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+          <canvas id="pinOverlay2" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">|Γ| vs Frequency</div>
-        <div class="chart-wrap"><canvas id="gammaChart"></canvas></div>
+        <div class="chart-wrap" style="position:relative">
+          <canvas id="gammaChart"></canvas>
+          <canvas id="markerOverlay3" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+          <canvas id="pinOverlay3" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+        <button class="btn" onclick="clearPins()" style="font-size:10px;padding:4px 10px">CLR PINS</button>
+        <div id="pinReadout" style="font-size:10px;color:var(--t3);flex:1"></div>
       </div>
     </div>
 
@@ -372,7 +418,18 @@ select:focus{border-color:var(--acc-border)}
           <div class="field-label">Phase shift (°) <span id="wPhaseVal">0</span></div>
           <input type="range" id="wPhase" min="0" max="360" value="0" oninput="document.getElementById('wPhaseVal').textContent=this.value;updateWaveInfo()">
         </div>
-        <div style="margin-top:12px" class="btn-row">
+        <div class="field" style="margin-top:4px">
+          <div class="field-label">Termination Mode</div>
+          <div class="btn-row" style="gap:6px">
+            <button class="btn wterm-btn active" id="wterm-matched" onclick="setTermination('matched',this)" style="font-size:10px;padding:5px 10px;flex:1">MATCHED</button>
+            <button class="btn wterm-btn" id="wterm-open" onclick="setTermination('open',this)" style="font-size:10px;padding:5px 10px;flex:1">OPEN</button>
+            <button class="btn wterm-btn" id="wterm-short" onclick="setTermination('short',this)" style="font-size:10px;padding:5px 10px;flex:1">SHORT</button>
+          </div>
+        </div>
+        <div id="wTermInfo" style="font-size:10px;color:var(--t3);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 10px;margin-top:6px">
+          Matched: Γ = 0, no reflection, all power delivered.
+        </div>
+        <div style="margin-top:10px" class="btn-row">
           <button class="btn primary" id="wavePlayBtn" onclick="toggleWave()">▶ PLAY</button>
           <button class="btn" onclick="resetWave()">RESET</button>
         </div>
@@ -438,26 +495,43 @@ select:focus{border-color:var(--acc-border)}
             <option value="HP">L-Network (High-Pass)</option>
           </select>
         </div>
+        <div class="field">
+          <div class="field-label">Component Tolerance <span id="mTolVal">5</span>%</div>
+          <input type="range" id="mTol" min="1" max="20" value="5" step="1" oninput="document.getElementById('mTolVal').textContent=this.value;calcMatch()">
+        </div>
+        <div class="field" style="margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t2);cursor:pointer">
+            <input type="checkbox" id="mE12snap" onchange="calcMatch()" style="width:auto;accent-color:var(--acc)">
+            Snap to E12 standard values
+          </label>
+        </div>
       </div>
 
       <div class="card">
         <div class="card-title">Computed Components</div>
-        <div id="matchComponents">
-          <div style="color:var(--t3);font-size:11px">Enter parameters above...</div>
-        </div>
+        <div id="matchComponents"><div style="color:var(--t3);font-size:11px">Enter parameters above...</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Tolerance Impact</div>
+        <div id="matchTolerance" style="font-size:11px;color:var(--t2);line-height:1.9"></div>
       </div>
     </div>
 
     <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card">
         <div class="card-title">Circuit Diagram</div>
-        <div class="circuit-wrap" id="circuitDiagram">
-          <div style="color:var(--t3);font-size:11px">Diagram appears here</div>
-        </div>
+        <div class="circuit-wrap" id="circuitDiagram"><div style="color:var(--t3);font-size:11px">Diagram appears here</div></div>
       </div>
       <div class="card">
-        <div class="card-title">Before vs After VSWR</div>
+        <div class="card-title">Before vs After VSWR
+          <span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:400">SHADED BAND = TOLERANCE</span>
+        </div>
         <div class="chart-wrap"><canvas id="matchChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Matching Path on Smith Chart</div>
+        <canvas id="matchSmithCanvas" width="400" height="260" style="width:100%;border-radius:4px;display:block"></canvas>
       </div>
       <div class="card" id="matchAICard">
         <div class="card-title">AI Analysis</div>
@@ -511,8 +585,12 @@ select:focus{border-color:var(--acc-border)}
     </div>
 
     <div class="card">
-      <div class="card-title">Smith Chart</div>
-      <canvas id="smithCanvas" width="500" height="500" style="width:100%;max-width:500px;margin:0 auto;display:block"></canvas>
+      <div class="card-title">
+        Smith Chart
+        <span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:400">DRAG POINT · HOVER TO READ</span>
+      </div>
+      <canvas id="smithCanvas" width="500" height="500" style="width:100%;max-width:500px;margin:0 auto;display:block;cursor:crosshair"></canvas>
+      <div id="smithHoverReadout" style="font-size:10px;color:var(--t3);text-align:center;margin-top:6px;height:16px"></div>
     </div>
 
   </div>
@@ -526,12 +604,26 @@ select:focus{border-color:var(--acc-border)}
 
     <div class="card">
       <div class="card-title">Learning Mode</div>
-      <div class="btn-row" style="margin-bottom:0">
-        <button class="learn-level-btn active" onclick="setLearnLevel(0,this)">Beginner</button>
-        <button class="learn-level-btn" onclick="setLearnLevel(1,this)">Intermediate</button>
-        <button class="learn-level-btn" onclick="setLearnLevel(2,this)">Advanced</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="learn-level-btn active" id="llb0" onclick="setLearnLevel(0,this)">Beginner</button>
+        <button class="learn-level-btn" id="llb1" onclick="setLearnLevel(1,this)">Intermediate</button>
+        <button class="learn-level-btn" id="llb2" onclick="setLearnLevel(2,this)">Advanced</button>
+        <button class="learn-level-btn" id="llbGuide" onclick="startGuide()" style="margin-left:auto;border-color:var(--acc-border);color:var(--acc)">▶ GUIDED TOUR</button>
       </div>
-      <div class="learn-content" id="learnContent"></div>
+      <!-- Guided walkthrough overlay (hidden by default) -->
+      <div id="guideOverlay" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div id="guideDots" style="display:flex;gap:5px"></div>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn" onclick="guideStep(-1)" style="font-size:10px;padding:4px 10px">← PREV</button>
+            <button class="btn primary" onclick="guideStep(1)" id="guideNextBtn" style="font-size:10px;padding:4px 10px">NEXT →</button>
+          </div>
+        </div>
+        <div id="guideContent" class="learn-content" style="margin-top:0"></div>
+        <div id="guideAction" style="margin-top:12px"></div>
+        <button class="btn" onclick="stopGuide()" style="font-size:10px;margin-top:10px;padding:4px 10px;color:var(--t3)">✕ EXIT TOUR</button>
+      </div>
+      <div id="learnContent" class="learn-content"></div>
     </div>
 
     <div>
@@ -598,6 +690,20 @@ select:focus{border-color:var(--acc-border)}
 ============================================================ */
 let vswrChartInst=null, rlChartInst=null, gammaChartInst=null, matchChartInst=null;
 let waveAnimId=null, wavePhase=0, waveRunning=false;
+
+// Phasor drag state
+let phasorDragging=false;
+let phasorHistory=[];
+let abRef=null;
+
+// Wave termination
+let wTermMode='matched';
+
+// Sweep saved overlays + marker
+let savedSweeps=[];
+const SWEEP_COLORS=['#fb923c','#a78bfa','#4ade80'];
+let lastSweepData=null;
+let markerPos=0.5;
 
 const CHART_DEFAULTS = {
   responsive:true, maintainAspectRatio:false,
@@ -696,33 +802,63 @@ function calcImpedance(){
 
   drawPhasor(R,X,Z0);
   aiDiagnose(R,X,Z0,gamma,vswr,rl);
+  if(abRef) updateABDisplay();
 }
 
 function drawPhasor(R,X,Z0){
   const cv=document.getElementById('phasorCanvas');
   const ctx=cv.getContext('2d');
-  const W=cv.offsetWidth||500, H=180;
+  const W=cv.offsetWidth||500, H=260;
   cv.width=W; cv.height=H;
   ctx.clearRect(0,0,W,H);
 
-  const ox=W*0.5, oy=H*0.5, scale=Math.min(W,H)*0.35/Math.max(Math.sqrt(R*R+X*X),Z0,1);
+  const ox=W*0.5, oy=H*0.5;
+  const maxVal=Math.max(Math.sqrt(R*R+X*X),Z0,1);
+  const scale=Math.min(W,H)*0.38/maxVal;
+
+  // Grid rings
+  [1,2,3].forEach(n=>{
+    ctx.beginPath(); ctx.arc(ox,oy,n*maxVal*scale*0.33,0,2*Math.PI);
+    ctx.strokeStyle='rgba(39,39,42,0.6)'; ctx.lineWidth=1; ctx.stroke();
+  });
 
   // Axes
   ctx.strokeStyle='#27272a'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(0,oy); ctx.lineTo(W,oy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(ox,0); ctx.lineTo(ox,H); ctx.stroke();
 
-  // Z0 circle
+  // Z0 circle (dashed)
   ctx.strokeStyle='rgba(34,211,238,0.2)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
   ctx.beginPath(); ctx.arc(ox,oy,Z0*scale,0,2*Math.PI); ctx.stroke();
   ctx.setLineDash([]);
+
+  // History trail
+  phasorHistory.forEach((h,i)=>{
+    const alpha=0.15+(i/phasorHistory.length)*0.35;
+    const hex=ox+h.R*scale, hey=oy-h.X*scale;
+    ctx.beginPath(); ctx.arc(hex,hey,4,0,2*Math.PI);
+    ctx.fillStyle=`rgba(34,211,238,${alpha})`; ctx.fill();
+    ctx.fillStyle=`rgba(161,161,170,${alpha*0.8})`;
+    ctx.font='9px IBM Plex Mono';
+    ctx.fillText('V'+h.vswr.toFixed(1),hex+5,hey-4);
+  });
+
+  // A/B reference ghost
+  if(abRef){
+    const ax=ox+abRef.R*scale, ay=oy-abRef.X*scale;
+    ctx.strokeStyle='rgba(251,191,36,0.4)'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(ax,ay); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(ax,ay,5,0,2*Math.PI);
+    ctx.strokeStyle='rgba(251,191,36,0.5)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='rgba(251,191,36,0.5)'; ctx.font='9px IBM Plex Mono';
+    ctx.fillText('A',ax+6,ay-4);
+  }
 
   // ZL vector
   const ex=ox+R*scale, ey=oy-X*scale;
   ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(ex,ey); ctx.stroke();
-
-  // Arrowhead
   const angle=Math.atan2(ey-oy,ex-ox);
   ctx.fillStyle='#22d3ee';
   ctx.beginPath();
@@ -731,17 +867,126 @@ function drawPhasor(R,X,Z0){
   ctx.lineTo(ex-10*Math.cos(angle+0.4),ey-10*Math.sin(angle+0.4));
   ctx.closePath(); ctx.fill();
 
+  // Drag handle ring
+  ctx.beginPath(); ctx.arc(ex,ey,10,0,2*Math.PI);
+  ctx.strokeStyle='rgba(34,211,238,0.3)'; ctx.lineWidth=1; ctx.stroke();
+
   // Z0 dot
   ctx.fillStyle='rgba(34,211,238,0.4)'; ctx.beginPath(); ctx.arc(ox+Z0*scale,oy,4,0,2*Math.PI); ctx.fill();
 
   // Labels
-  ctx.fillStyle='#52525b'; ctx.font='10px IBM Plex Mono';
-  ctx.fillText('R',W-25,oy-5);
+  ctx.fillStyle='#52525b'; ctx.font='10px IBM Plex Mono'; ctx.textAlign='left';
+  ctx.fillText('R',W-22,oy-5);
   ctx.fillText('jX',ox+5,12);
   ctx.fillStyle='#22d3ee'; ctx.font='11px IBM Plex Mono';
-  ctx.fillText('ZL='+R+(X>=0?'+j':'-j')+Math.abs(X),ex+6,ey-6);
+  const zlabel='ZL='+R.toFixed(0)+(X>=0?'+j':'-j')+Math.abs(X).toFixed(0);
+  const lx=Math.min(ex+6, W-zlabel.length*7);
+  ctx.fillText(zlabel,lx,Math.max(ey-8,12));
   ctx.fillStyle='rgba(34,211,238,0.5)';
-  ctx.fillText('Z₀='+Z0+'Ω',ox+Z0*scale+4,oy+14);
+  ctx.fillText('Z₀='+Z0+'Ω',Math.min(ox+Z0*scale+4,W-60),oy+14);
+
+  // Reactance component hint
+  updateCompHint(R,X);
+}
+
+function updateCompHint(R,X){
+  const f=parseFloat(document.getElementById('diagFreq').value)*1e6;
+  const hint=document.getElementById('compHint');
+  if(Math.abs(X)<0.5){hint.style.display='none';return;}
+  hint.style.display='block';
+  if(X>0){
+    const L=(X/(2*Math.PI*f))*1e9;
+    hint.innerHTML='Inductive: X=+'+X.toFixed(1)+'Ω → <span style="color:var(--acc)">L = '+L.toFixed(2)+' nH</span> at '+(f/1e6).toFixed(0)+' MHz';
+  } else {
+    const C=(1/(2*Math.PI*f*Math.abs(X)))*1e12;
+    hint.innerHTML='Capacitive: X='+X.toFixed(1)+'Ω → <span style="color:var(--acc)">C = '+C.toFixed(2)+' pF</span> at '+(f/1e6).toFixed(0)+' MHz';
+  }
+}
+
+// ── Phasor canvas drag interaction ──
+function initPhasorDrag(){
+  const cv=document.getElementById('phasorCanvas');
+  function getPos(e){
+    const rect=cv.getBoundingClientRect();
+    const scaleX=cv.width/rect.width;
+    const scaleY=cv.height/rect.height;
+    const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+    const cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+    return{x:cx*scaleX,y:cy*scaleY};
+  }
+  function applyPos(x,y){
+    const W=cv.width, H=cv.height, ox=W*0.5, oy=H*0.5;
+    const R0=parseFloat(document.getElementById('rNum').value)||75;
+    const X0=parseFloat(document.getElementById('xNum').value)||0;
+    const Z0=parseFloat(document.getElementById('z0Num').value)||50;
+    const maxVal=Math.max(Math.sqrt(R0*R0+X0*X0),Z0,1);
+    const scale=Math.min(W,H)*0.38/maxVal;
+    let newR=Math.round((x-ox)/scale);
+    let newX=Math.round(-(y-oy)/scale);
+    newR=Math.max(1,newR);
+    // push history before updating
+    const prevR=parseFloat(document.getElementById('rNum').value)||1;
+    const prevX=parseFloat(document.getElementById('xNum').value)||0;
+    const prevZ0=parseFloat(document.getElementById('z0Num').value)||50;
+    const nR=prevR-prevZ0,nI=prevX,dR=prevR+prevZ0,dI=prevX;
+    const d2=dR*dR+dI*dI;
+    const gR=(nR*dR+nI*dI)/d2,gI=(nI*dR-nR*dI)/d2;
+    const g=Math.sqrt(gR*gR+gI*gI);
+    const v=g>=1?99:(1+g)/(1-g);
+    if(phasorHistory.length===0||Math.abs(phasorHistory[phasorHistory.length-1].R-prevR)>5||Math.abs(phasorHistory[phasorHistory.length-1].X-prevX)>5){
+      phasorHistory.push({R:prevR,X:prevX,vswr:v});
+      if(phasorHistory.length>6) phasorHistory.shift();
+    }
+    // update inputs
+    document.getElementById('rNum').value=newR;
+    document.getElementById('rSlider').value=Math.min(newR,300);
+    document.getElementById('rVal').textContent=newR;
+    document.getElementById('xNum').value=newX;
+    document.getElementById('xSlider').value=Math.min(Math.max(newX,-200),200);
+    document.getElementById('xVal').textContent=(newX>=0?'+':'')+newX;
+    calcImpedance();
+  }
+  cv.addEventListener('mousedown',e=>{phasorDragging=true;applyPos(...Object.values(getPos(e)));});
+  cv.addEventListener('mousemove',e=>{if(phasorDragging)applyPos(...Object.values(getPos(e)));});
+  cv.addEventListener('mouseup',()=>phasorDragging=false);
+  cv.addEventListener('mouseleave',()=>phasorDragging=false);
+  cv.addEventListener('touchstart',e=>{e.preventDefault();phasorDragging=true;applyPos(...Object.values(getPos(e)));},{passive:false});
+  cv.addEventListener('touchmove',e=>{e.preventDefault();if(phasorDragging)applyPos(...Object.values(getPos(e)));},{passive:false});
+  cv.addEventListener('touchend',()=>phasorDragging=false);
+}
+
+function clearHistory(){phasorHistory=[];abRef=null;document.getElementById('abDisplay').textContent='';calcImpedance();}
+
+function abLock(){
+  const R=parseFloat(document.getElementById('rNum').value)||0;
+  const X=parseFloat(document.getElementById('xNum').value)||0;
+  const Z0=parseFloat(document.getElementById('z0Num').value)||50;
+  const nR=R-Z0,nI=X,dR=R+Z0,dI=X,d2=dR*dR+dI*dI;
+  const gR=(nR*dR+nI*dI)/d2,gI=(nI*dR-nR*dI)/d2;
+  const g=Math.sqrt(gR*gR+gI*gI);
+  const v=g>=1?99:(1+g)/(1-g);
+  const rl=g<1e-6?99:-20*Math.log10(g);
+  abRef={R,X,vswr:v,rl};
+  document.getElementById('abLockBtn').textContent='REF A: '+R+(X>=0?'+j':'-j')+Math.abs(X)+' Ω';
+  updateABDisplay();
+  calcImpedance();
+}
+
+function updateABDisplay(){
+  if(!abRef) return;
+  const R=parseFloat(document.getElementById('rNum').value)||0;
+  const X=parseFloat(document.getElementById('xNum').value)||0;
+  const Z0=parseFloat(document.getElementById('z0Num').value)||50;
+  const nR=R-Z0,nI=X,dR=R+Z0,dI=X,d2=dR*dR+dI*dI;
+  const gR=(nR*dR+nI*dI)/d2,gI=(nI*dR-nR*dI)/d2;
+  const g=Math.sqrt(gR*gR+gI*gI);
+  const v=g>=1?99:(1+g)/(1-g);
+  const rl=g<1e-6?99:-20*Math.log10(g);
+  const dv=(v-abRef.vswr).toFixed(2);
+  const dr=(rl-abRef.rl).toFixed(1);
+  const col=v<abRef.vswr?'#4ade80':'#f87171';
+  document.getElementById('abDisplay').innerHTML=
+    'ΔV: <span style="color:'+col+'">'+(v<abRef.vswr?'':'+')+ dv+'</span> &nbsp; ΔRL: <span style="color:'+col+'">'+(rl>abRef.rl?'+':'')+dr+' dB</span>';
 }
 
 function setPreset(r,x){
@@ -849,9 +1094,24 @@ function runSweep(){
   const vswr2Line={label:'VSWR=2',data:freqs.map(()=>2),borderColor:'rgba(251,191,36,0.4)',borderWidth:1,borderDash:[4,4],pointRadius:0};
   chartData.datasets.push(vswr2Line);
 
-  buildChart('vswrChart', freqs, vswrArr, '#22d3ee', 'VSWR', 0, 6);
-  buildChart('rlChart', freqs, rlArr, '#a78bfa', 'Return Loss (dB)', 0, 40);
-  buildChart('gammaChart', freqs, gammaArr.map(g=>+g.toFixed(4)), '#4ade80', '|Γ|', 0, 1);
+  lastSweepData={freqs,vswrArr,rlArr,gammaArr:gammaArr.map(g=>+g.toFixed(4)),fmax};
+
+  // Build datasets including saved sweeps
+  function mkDatasets(key,mainColor,mainData){
+    const ds=[{data:mainData,borderColor:mainColor,borderWidth:1.5,pointRadius:0,
+      fill:true,backgroundColor:mainColor+'18',tension:0.3,label:'Current'}];
+    savedSweeps.forEach(s=>{
+      ds.push({data:s[key],borderColor:s.color,borderWidth:1,pointRadius:0,
+        tension:0.3,borderDash:[4,3],label:s.label});
+    });
+    return ds;
+  }
+
+  buildChart('vswrChart', freqs, vswrArr, '#22d3ee', 'VSWR', 0, 6, mkDatasets('vswrArr','#22d3ee',vswrArr));
+  buildChart('rlChart', freqs, rlArr, '#a78bfa', 'Return Loss (dB)', 0, 40, mkDatasets('rlArr','#a78bfa',rlArr));
+  buildChart('gammaChart', freqs, gammaArr.map(g=>+g.toFixed(4)), '#4ade80', '|Γ|', 0, 1, mkDatasets('gammaArr','#4ade80',gammaArr.map(g=>+g.toFixed(4))));
+
+  setTimeout(()=>{updateMarker(document.getElementById('freqMarker').value);},50);
 
   // Summary chips
   document.getElementById('resChip').textContent='Resonance: '+(resonanceF>0?(resonanceF/1e6).toFixed(1)+' MHz':'N/A');
@@ -868,25 +1128,89 @@ function runSweep(){
   document.getElementById('sweepAI').innerHTML=sweepTxt;
 }
 
-function buildChart(id,labels,data,color,ylabel,ymin,ymax){
+function buildChart(id,labels,data,color,ylabel,ymin,ymax,extraDatasets){
   const ctx=document.getElementById(id);
   if(!ctx) return;
-  // destroy old
   if(ctx._chart) ctx._chart.destroy();
+  const datasets=extraDatasets||[{data,borderColor:color,borderWidth:1.5,pointRadius:0,
+    fill:true,backgroundColor:color+'18',tension:0.3}];
   ctx._chart=new Chart(ctx,{
     type:'line',
-    data:{labels,datasets:[{data,borderColor:color,borderWidth:1.5,pointRadius:0,
-      fill:true,backgroundColor:color.replace('#','rgba(').replace(/^rgba\(([^)]+)\)/,'rgba($1, 0.07)').replace('rgba(','rgba(').replace(/,0\.07\)$/,', 0.07)'),
-      tension:0.3}]},
+    data:{labels,datasets},
     options:{...CHART_DEFAULTS,plugins:{...CHART_DEFAULTS.plugins,
+      legend:{display:savedSweeps.length>0,labels:{color:'#a1a1aa',font:{family:"'IBM Plex Mono',monospace",size:9},boxWidth:12}},
       tooltip:{...CHART_DEFAULTS.plugins.tooltip,callbacks:{title:i=>i[0].label+' MHz',label:i=>ylabel+': '+i.raw}}},
       scales:{...CHART_DEFAULTS.scales,y:{...CHART_DEFAULTS.scales.y,min:ymin,max:ymax}}}
   });
 }
 
-/* ============================================================
-   PANEL 3: WAVE SIMULATOR
-============================================================ */
+function saveSweep(){
+  if(!lastSweepData) return;
+  if(savedSweeps.length>=3){document.getElementById('sweepSaveInfo').textContent='Max 3 sweeps saved. Clear first.';return;}
+  const idx=savedSweeps.length;
+  const type=document.getElementById('sweepType').value;
+  const R=document.getElementById('sRSlider').value;
+  savedSweeps.push({...lastSweepData,color:SWEEP_COLORS[idx],label:type+' R='+R+'Ω'});
+  document.getElementById('sweepSaveInfo').textContent=savedSweeps.map((s,i)=>'S'+(i+1)+': '+s.label).join(' | ');
+  runSweep();
+}
+function clearSweeps(){savedSweeps=[];document.getElementById('sweepSaveInfo').textContent='';runSweep();}
+
+function updateMarker(val){
+  markerPos=val/100;
+  drawMarkerOverlays();
+  if(!lastSweepData) return;
+  const {freqs,vswrArr,rlArr,gammaArr}=lastSweepData;
+  const idx=Math.min(Math.floor(markerPos*(freqs.length-1)),freqs.length-1);
+  const f=freqs[idx];
+  document.getElementById('freqMarkerLabel').textContent=f.toFixed(1)+' MHz';
+}
+
+function drawMarkerOverlays(){
+  [1,2,3].forEach(n=>{
+    const ov=document.getElementById('markerOverlay'+n);
+    if(!ov) return;
+    const chart={1:document.getElementById('vswrChart')._chart,
+                 2:document.getElementById('rlChart')._chart,
+                 3:document.getElementById('gammaChart')._chart}[n];
+    if(!chart) return;
+    const W=ov.offsetWidth, H=ov.offsetHeight;
+    ov.width=W; ov.height=H;
+    const ctx=ov.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    const area=chart.chartArea;
+    if(!area) return;
+    const sx=area.left+(area.right-area.left)*markerPos;
+    ctx.strokeStyle='rgba(34,211,238,0.6)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(sx,area.top); ctx.lineTo(sx,area.bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    // readout
+    if(lastSweepData){
+      const {freqs,vswrArr,rlArr,gammaArr}=lastSweepData;
+      const idx=Math.min(Math.floor(markerPos*(freqs.length-1)),freqs.length-1);
+      const vals=[vswrArr[idx],rlArr[idx],gammaArr[idx]];
+      const labels=['VSWR','RL (dB)','|Γ|'];
+      ctx.fillStyle='rgba(34,211,238,0.85)'; ctx.font='10px IBM Plex Mono';
+      ctx.fillText(labels[n-1]+': '+(vals[n-1]).toFixed(3),sx+4,area.top+12);
+    }
+  });
+}
+function setTermination(mode,btn){
+  wTermMode=mode;
+  document.querySelectorAll('.wterm-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const infos={
+    matched:'Matched: Γ = 0, no reflection. All incident power is absorbed by the load.',
+    open:'Open circuit: Γ = +1, ∠0°. Voltage doubles at the load end. Total reflection, no phase reversal.',
+    short:'Short circuit: Γ = −1, ∠180°. Voltage is zero at the load. Total reflection with 180° phase reversal.'
+  };
+  document.getElementById('wTermInfo').textContent=infos[mode];
+  if(mode==='matched') document.getElementById('wGamma').value=0;
+  else document.getElementById('wGamma').value=100;
+  document.getElementById('wGammaVal').textContent=mode==='matched'?'0.00':'1.00';
+  updateWaveInfo();
+}
+
 function updateWaveInfo(){
   const gamma=parseFloat(document.getElementById('wGamma').value)/100;
   const freq=parseFloat(document.getElementById('wFreq').value)*1e6;
@@ -944,13 +1268,14 @@ function drawWave(){
   }
   ctx.stroke();
 
-  // Reflected wave (orange)
+  // Reflected wave (orange) — phase-reversed for short circuit
+  const refSign=(wTermMode==='short')?-1:1;
   ctx.strokeStyle='#fb923c'; ctx.lineWidth=1.5;
   ctx.beginPath();
   for(let i=0;i<=N;i++){
     const x=ox+ow*i/N;
     const pos=i/N;
-    const y=midY-amp*gamma*Math.sin(2*Math.PI*(1-pos + phase*0.02) + userPhase);
+    const y=midY-amp*gamma*refSign*Math.sin(2*Math.PI*(1-pos + phase*0.02) + userPhase);
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
   }
   ctx.stroke();
@@ -1014,129 +1339,136 @@ function resetWave(){
 }
 
 /* ============================================================
-   PANEL 4: MATCHING CIRCUIT
+   E12 STANDARD VALUES + PANEL 4: MATCHING CIRCUIT (upgraded)
 ============================================================ */
+const E12=[1.0,1.2,1.5,1.8,2.2,2.7,3.3,3.9,4.7,5.6,6.8,8.2];
+function snapE12(val){
+  const decades=[0.01,0.1,1,10,100,1000,10000];
+  let best=val,bestDiff=Infinity;
+  decades.forEach(dec=>E12.forEach(e=>{const v=e*dec;const d=Math.abs(v-val);if(d<bestDiff){bestDiff=d;best=v;}}));
+  return best;
+}
+
 function calcMatch(){
   const RL=parseFloat(document.getElementById('mRL').value)||75;
   const XL=parseFloat(document.getElementById('mXL').value)||0;
   const Z0=parseFloat(document.getElementById('mZ0').value)||50;
   const f=parseFloat(document.getElementById('mFreq').value)*1e6||2.4e9;
   const type=document.getElementById('mType').value;
+  const tol=parseFloat(document.getElementById('mTol').value)/100;
+  const doSnap=document.getElementById('mE12snap').checked;
   const w=2*Math.PI*f;
 
-  // L-network synthesis
-  // For RL > Z0: Q = sqrt(RL/Z0 - 1)
-  // For RL < Z0: Q = sqrt(Z0/RL - 1)
-  const Rhigh=Math.max(RL,Z0), Rlow=Math.min(RL,Z0);
-  const Q=Math.sqrt(Rhigh/Rlow-1);
-  let Xs,Xp,Cs,Ls,Cp,Lp;
+  const Rhigh=Math.max(RL,Z0),Rlow=Math.min(RL,Z0);
+  const Q=Math.sqrt(Math.max(Rhigh/Rlow-1,0.001));
   const matchHigh=(RL>Z0);
+  const Xs=Q*Rlow,Xp=Rhigh/Q;
 
+  let comp1Ideal,comp2Ideal,comp1Unit,comp2Unit,comp1Name,comp2Name,c1raw,c2raw;
   if(type==='LP'){
-    // Series element toward high R, shunt element toward low R
-    Xs=Q*Rlow; // series X
-    Xp=Rhigh/Q; // parallel X
     if(matchHigh){
-      // series L, shunt C (LP characteristic)
-      Ls=Xs/w; Cp=1/(w*Xp);
-      document.getElementById('matchComponents').innerHTML=
-        '<div class="comp-row"><span class="comp-name">Series Inductor (Ls)</span><span class="comp-val">'+(Ls*1e9).toFixed(2)+' nH</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Shunt Capacitor (Cp)</span><span class="comp-val">'+(Cp*1e12).toFixed(2)+' pF</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Bandwidth (~1/Q)</span><span class="comp-val">'+(f/Q/1e6).toFixed(1)+' MHz</span></div>';
-      drawCircuit('LP-series-L',Ls,Cp,f);
+      c1raw=Xs/w; comp1Ideal=c1raw*1e9; comp1Unit='nH'; comp1Name='Series L';
+      c2raw=1/(w*Xp); comp2Ideal=c2raw*1e12; comp2Unit='pF'; comp2Name='Shunt C';
     } else {
-      Cs=1/(w*Xs); Lp=Xp/w;
-      document.getElementById('matchComponents').innerHTML=
-        '<div class="comp-row"><span class="comp-name">Series Capacitor (Cs)</span><span class="comp-val">'+(Cs*1e12).toFixed(2)+' pF</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Shunt Inductor (Lp)</span><span class="comp-val">'+(Lp*1e9).toFixed(2)+' nH</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>';
-      drawCircuit('LP-series-C',Cs,Lp,f);
+      c1raw=1/(w*Xs); comp1Ideal=c1raw*1e12; comp1Unit='pF'; comp1Name='Series C';
+      c2raw=Xp/w; comp2Ideal=c2raw*1e9; comp2Unit='nH'; comp2Name='Shunt L';
     }
   } else {
-    // HP: series C, shunt L
-    Xs=Q*Rlow; Xp=Rhigh/Q;
     if(matchHigh){
-      Cs=1/(w*Xs); Lp=Xp/w;
-      document.getElementById('matchComponents').innerHTML=
-        '<div class="comp-row"><span class="comp-name">Series Capacitor (Cs)</span><span class="comp-val">'+(Cs*1e12).toFixed(2)+' pF</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Shunt Inductor (Lp)</span><span class="comp-val">'+(Lp*1e9).toFixed(2)+' nH</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Bandwidth (~1/Q)</span><span class="comp-val">'+(f/Q/1e6).toFixed(1)+' MHz</span></div>';
-      drawCircuit('HP-series-C',Cs,Lp,f);
+      c1raw=1/(w*Xs); comp1Ideal=c1raw*1e12; comp1Unit='pF'; comp1Name='Series C';
+      c2raw=Xp/w; comp2Ideal=c2raw*1e9; comp2Unit='nH'; comp2Name='Shunt L';
     } else {
-      Ls=Xs/w; Cp=1/(w*Xp);
-      document.getElementById('matchComponents').innerHTML=
-        '<div class="comp-row"><span class="comp-name">Series Inductor (Ls)</span><span class="comp-val">'+(Ls*1e9).toFixed(2)+' nH</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Shunt Capacitor (Cp)</span><span class="comp-val">'+(Cp*1e12).toFixed(2)+' pF</span></div>'+
-        '<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">'+Q.toFixed(3)+'</span></div>';
-      drawCircuit('HP-series-L',Ls,Cp,f);
+      c1raw=Xs/w; comp1Ideal=c1raw*1e9; comp1Unit='nH'; comp1Name='Series L';
+      c2raw=1/(w*Xp); comp2Ideal=c2raw*1e12; comp2Unit='pF'; comp2Name='Shunt C';
     }
   }
 
-  // Before/After comparison chart
-  const freqs=[],beforeArr=[],afterArr=[];
+  const c1s=doSnap?snapE12(comp1Ideal):comp1Ideal;
+  const c2s=doSnap?snapE12(comp2Ideal):comp2Ideal;
+  const d1=((c1s-comp1Ideal)/comp1Ideal*100);
+  const d2=((c2s-comp2Ideal)/comp2Ideal*100);
+
+  document.getElementById('matchComponents').innerHTML=
+    `<div class="comp-row"><span class="comp-name">${comp1Name} — ideal</span><span class="comp-val">${comp1Ideal.toFixed(3)} ${comp1Unit}</span></div>`+
+    (doSnap?`<div class="comp-row"><span class="comp-name">${comp1Name} — E12</span><span class="comp-val" style="color:${Math.abs(d1)<5?'var(--green)':'var(--yellow)'}">${c1s.toFixed(2)} ${comp1Unit} <span style="font-size:10px;color:var(--t3)">(${d1>=0?'+':''}${d1.toFixed(1)}%)</span></span></div>`:'')+
+    `<div class="comp-row"><span class="comp-name">${comp2Name} — ideal</span><span class="comp-val">${comp2Ideal.toFixed(3)} ${comp2Unit}</span></div>`+
+    (doSnap?`<div class="comp-row"><span class="comp-name">${comp2Name} — E12</span><span class="comp-val" style="color:${Math.abs(d2)<5?'var(--green)':'var(--yellow)'}">${c2s.toFixed(2)} ${comp2Unit} <span style="font-size:10px;color:var(--t3)">(${d2>=0?'+':''}${d2.toFixed(1)}%)</span></span></div>`:'')+
+    `<div class="comp-row"><span class="comp-name">Q factor</span><span class="comp-val">${Q.toFixed(3)}</span></div>`+
+    `<div class="comp-row"><span class="comp-name">Bandwidth est.</span><span class="comp-val">${(f/Q/1e6).toFixed(1)} MHz</span></div>`;
+
+  // Tolerance impact card
+  const vnom=1+2*Q*Q*0;
+  const vworse=1+2*(Q*(1+tol))*(Q*(1+tol))*((tol*0.5)**2)*100;
+  // Real worst-case: component shift pushes resonant freq
+  const tolPct=Math.round(tol*100);
+  const fShift=f*(1-tol*0.5);
+  const deltaWorst=(fShift-f)/f;
+  const vswrWorst=1+2*Q*Q*deltaWorst*deltaWorst;
+  document.getElementById('matchTolerance').innerHTML=
+    `±${tolPct}% tolerance on both components shifts resonance by ~${(Math.abs(deltaWorst*100)).toFixed(1)}%<br>`+
+    `<span style="color:var(--green)">Nominal VSWR at design freq: 1.00</span><br>`+
+    `<span style="color:${vswrWorst<2?'var(--yellow)':'var(--red)'}">Worst-case VSWR: ${vswrWorst.toFixed(2)}</span><br>`+
+    `<span style="color:var(--t3)">Recommendation: use ${tolPct>5?'1%':'5%'} or better components.</span>`;
+
+  // Draw circuit diagram
+  const typeKey=(type==='LP'?'LP':'HP')+'-'+(comp1Unit==='nH'?'series-L':'series-C');
+  const rawV1=comp1Unit==='nH'?c1s*1e-9:c1s*1e-12;
+  const rawV2=comp2Unit==='nH'?c2s*1e-9:c2s*1e-12;
+  drawCircuit(typeKey,rawV1,rawV2,f,comp1Unit,comp2Unit,c1s,c2s);
+
+  // Before/after + tolerance band
+  const freqs=[],beforeArr=[],afterNom=[],afterWorstArr=[],afterBestArr=[];
   for(let i=1;i<=200;i++){
     const fi=f*0.2+f*1.8*i/200;
     freqs.push((fi/1e6).toFixed(0));
-    const wi=2*Math.PI*fi;
-    // Before: just RL+jXL vs Z0
-    const bR=RL-Z0,bI=XL,bdR=RL+Z0,bdI=XL;
-    const bd2=bdR*bdR+bdI*bdI;
-    const bgR=(bR*bdR+bI*bdI)/bd2,bgI=(bI*bdR-bR*bdI)/bd2;
-    const bg=Math.sqrt(bgR*bgR+bgI*bgI);
+    const bR=RL-Z0,bI=XL,bdR=RL+Z0,bdI=XL,bd2=bdR*bdR+bdI*bdI;
+    const bg=Math.sqrt(((bR*bdR+bI*bdI)/bd2)**2+((bI*bdR-bR*bdI)/bd2)**2);
     beforeArr.push(Math.min((1+bg)/(1-bg+1e-9),10));
-    // After: matched network transforms ZL
-    // Simplified: at design freq VSWR=1, rolls off with Q
-    const deltaf=(fi-f)/f;
-    const vaft=1+2*Q*Q*deltaf*deltaf;
-    afterArr.push(Math.min(vaft,10));
+    const df=(fi-f)/f;
+    afterNom.push(Math.min(1+2*Q*Q*df*df,6));
+    const Qworst=Q*(1+tol);
+    afterWorstArr.push(Math.min(1+2*Qworst*Qworst*df*df,6));
+    afterBestArr.push(Math.min(1+2*(Q*(1-tol))*(Q*(1-tol))*df*df,6));
   }
-
   const mctx=document.getElementById('matchChart');
   if(mctx._chart) mctx._chart.destroy();
-  mctx._chart=new Chart(mctx,{
-    type:'line',
+  mctx._chart=new Chart(mctx,{type:'line',
     data:{labels:freqs,datasets:[
       {label:'Before',data:beforeArr,borderColor:'#f87171',borderWidth:1.5,pointRadius:0,tension:0.3,borderDash:[4,4]},
-      {label:'After',data:afterArr,borderColor:'#4ade80',borderWidth:1.5,pointRadius:0,tension:0.3}
+      {label:'After (nominal)',data:afterNom,borderColor:'#4ade80',borderWidth:2,pointRadius:0,tension:0.3},
+      {label:`±${tolPct}% best`,data:afterBestArr,borderColor:'rgba(34,211,238,0.35)',borderWidth:1,pointRadius:0,tension:0.3,fill:false},
+      {label:`±${tolPct}% worst`,data:afterWorstArr,borderColor:'rgba(251,191,36,0.5)',borderWidth:1,pointRadius:0,tension:0.3,borderDash:[3,3]},
     ]},
-    options:{...CHART_DEFAULTS,plugins:{...CHART_DEFAULTS.plugins,legend:{display:true,labels:{color:'#a1a1aa',font:{family:"'IBM Plex Mono',monospace",size:10}}}},
-      scales:{...CHART_DEFAULTS.scales,y:{...CHART_DEFAULTS.scales.y,min:1,max:6,title:{display:true,text:'VSWR',color:'#52525b',font:{family:"'IBM Plex Mono',monospace",size:10}}}}}
+    options:{...CHART_DEFAULTS,
+      plugins:{...CHART_DEFAULTS.plugins,legend:{display:true,labels:{color:'#52525b',font:{family:"'IBM Plex Mono',monospace",size:9},boxWidth:10}}},
+      scales:{...CHART_DEFAULTS.scales,y:{...CHART_DEFAULTS.scales.y,min:1,max:6}}}
   });
 
-  // AI
+  // Matching path Smith Chart
+  drawMatchingSmith(RL,XL,Z0,f,comp1Name,comp1Unit,c1s,comp2Unit,c2s);
+
   document.getElementById('matchAI').innerHTML=
-    'L-network designed for <strong>'+type+'</strong> response at <strong>'+(f/1e6).toFixed(0)+' MHz</strong>. '+
-    'Q factor = '+Q.toFixed(2)+' provides ~'+(f/Q/1e6).toFixed(0)+' MHz bandwidth. '+
-    (Q>5?'High Q — narrow bandwidth, good selectivity but sensitive to component tolerance.':'Moderate Q — good bandwidth with reasonable component tolerances.');
+    `L-network (${type}) at <strong>${(f/1e6).toFixed(0)} MHz</strong>. Q=${Q.toFixed(2)}, BW≈${(f/Q/1e6).toFixed(0)} MHz. `+
+    (doSnap?`E12 snap: ${comp1Name} ${c1s.toFixed(2)} ${comp1Unit}, ${comp2Name} ${c2s.toFixed(2)} ${comp2Unit}. `:'')+
+    `±${tolPct}% tolerance → worst-case VSWR ${vswrWorst.toFixed(2)}. `+
+    (Q>5?'High Q — narrow but selective. Consider 1% components.':'Moderate Q — good bandwidth.');
 }
 
-function drawCircuit(type, val1, val2, f){
+function drawCircuit(type,val1,val2,f,cu1,cu2,cv1,cv2){
   const el=document.getElementById('circuitDiagram');
   const w=Math.min(el.offsetWidth-32,420);
-  const h=120;
-  const isSeriesL=type.includes('series-L')&&!type.includes('HP')||type.includes('HP-series-L');
-  const isSeriesC=type.includes('series-C');
-
-  const c1label=val1?(type.includes('series-L')?'L='+(val1*1e9).toFixed(1)+'nH':'C='+(val1*1e12).toFixed(1)+'pF'):'';
-  const c2label=val2?(type.includes('LP')&&type.includes('series-L')?'C='+(val2*1e12).toFixed(1)+'pF':'L='+(val2*1e9).toFixed(1)+'nH'):'';
-
-  el.innerHTML=`<svg viewBox="0 0 420 120" width="${w}" height="${h}" style="display:block;margin:0 auto">
-    <defs><marker id="ca" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#22d3ee" stroke-width="2"/></marker></defs>
-    <!-- Source -->
+  const isSeriesL=cu1==='nH';
+  const c1label=(cu1==='nH'?'L='+cv1.toFixed(2)+'nH':'C='+cv1.toFixed(2)+'pF');
+  const c2label=(cu2==='nH'?'L='+cv2.toFixed(2)+'nH':'C='+cv2.toFixed(2)+'pF');
+  el.innerHTML=`<svg viewBox="0 0 420 120" width="${w}" height="110" style="display:block;margin:0 auto">
     <rect x="8" y="45" width="40" height="30" rx="4" fill="#18181b" stroke="#3f3f46" stroke-width="1"/>
     <text x="28" y="63" text-anchor="middle" fill="#52525b" font-size="9" font-family="IBM Plex Mono">Z₀</text>
-    <!-- Wire from source -->
     <line x1="48" y1="60" x2="110" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
-    <!-- Series element box -->
     <rect x="110" y="44" width="60" height="32" rx="4" fill="#18181b" stroke="#22d3ee" stroke-width="1.5"/>
     <text x="140" y="56" text-anchor="middle" fill="#22d3ee" font-size="8" font-family="IBM Plex Mono">${isSeriesL?'L':'C'}</text>
     <text x="140" y="68" text-anchor="middle" fill="#a1a1aa" font-size="7.5" font-family="IBM Plex Mono">${c1label}</text>
-    <!-- Wire to shunt -->
     <line x1="170" y1="60" x2="250" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
-    <!-- Shunt element -->
-    <line x1="250" y1="60" x2="250" y2="40" stroke="#22d3ee" stroke-width="1.5"/>
+    <line x1="250" y1="44" x2="250" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
     <rect x="222" y="20" width="56" height="24" rx="4" fill="#18181b" stroke="#a78bfa" stroke-width="1.5"/>
     <text x="250" y="30" text-anchor="middle" fill="#a78bfa" font-size="8" font-family="IBM Plex Mono">${isSeriesL?'C':'L'}</text>
     <text x="250" y="40" text-anchor="middle" fill="#a1a1aa" font-size="7.5" font-family="IBM Plex Mono">${c2label}</text>
@@ -1144,41 +1476,201 @@ function drawCircuit(type, val1, val2, f){
     <line x1="222" y1="90" x2="278" y2="90" stroke="#52525b" stroke-width="1"/>
     <line x1="232" y1="95" x2="268" y2="95" stroke="#52525b" stroke-width="1"/>
     <line x1="243" y1="100" x2="257" y2="100" stroke="#52525b" stroke-width="1"/>
-    <!-- Wire to load -->
     <line x1="250" y1="60" x2="310" y2="60" stroke="#22d3ee" stroke-width="1.5"/>
-    <!-- Load -->
     <rect x="310" y="44" width="60" height="32" rx="4" fill="#18181b" stroke="#fb923c" stroke-width="1.5"/>
     <text x="340" y="56" text-anchor="middle" fill="#fb923c" font-size="9" font-family="IBM Plex Mono">ZL</text>
     <text x="340" y="68" text-anchor="middle" fill="#a1a1aa" font-size="7.5" font-family="IBM Plex Mono">Load</text>
-    <!-- Ground -->
     <line x1="8" y1="75" x2="8" y2="90" stroke="#3f3f46" stroke-width="1"/>
     <line x1="1" y1="90" x2="15" y2="90" stroke="#3f3f46" stroke-width="1"/>
     <line x1="3" y1="95" x2="13" y2="95" stroke="#3f3f46" stroke-width="1"/>
-    <line x1="5" y1="100" x2="11" y2="100" stroke="#3f3f46" stroke-width="1"/>
-    <line x1="370" y1="75" x2="370" y2="90" stroke="#3f3f46" stroke-width="1"/>
-    <line x1="363" y1="90" x2="377" y2="90" stroke="#3f3f46" stroke-width="1"/>
-    <line x1="365" y1="95" x2="375" y2="95" stroke="#3f3f46" stroke-width="1"/>
-    <line x1="367" y1="100" x2="373" y2="100" stroke="#3f3f46" stroke-width="1"/>
     <line x1="370" y1="60" x2="370" y2="76" stroke="#22d3ee" stroke-width="1.5"/>
-    <!-- Label -->
-    <text x="210" y="115" text-anchor="middle" fill="#52525b" font-size="8" font-family="IBM Plex Mono">L-Network ${type} @ ${(f/1e6).toFixed(0)}MHz</text>
+    <line x1="363" y1="76" x2="377" y2="76" stroke="#3f3f46" stroke-width="1"/>
+    <line x1="365" y1="81" x2="375" y2="81" stroke="#3f3f46" stroke-width="1"/>
+    <text x="210" y="115" text-anchor="middle" fill="#52525b" font-size="8" font-family="IBM Plex Mono">${type} @ ${(f/1e6).toFixed(0)}MHz</text>
   </svg>`;
 }
 
+function drawMatchingSmith(RL,XL,Z0,f,cn1,cu1,cv1,cu2,cv2){
+  const cv=document.getElementById('matchSmithCanvas');
+  if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const W=cv.offsetWidth||400,H=260;
+  cv.width=W; cv.height=H;
+  ctx.clearRect(0,0,W,H);
+  const cx=W*0.5,cy=H*0.5,R=Math.min(W,H)*0.43;
+
+  // VSWR regions
+  ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.clip();
+  [{g:1,c:'rgba(248,113,113,0.08)'},{g:0.333,c:'rgba(251,191,36,0.10)'},{g:0.2,c:'rgba(74,222,128,0.10)'}]
+    .forEach(({g,c})=>{ctx.beginPath();ctx.arc(cx,cy,R*g,0,2*Math.PI);ctx.fillStyle=c;ctx.fill();});
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.strokeStyle='#3f3f46'; ctx.lineWidth=1; ctx.stroke();
+
+  // Grid
+  [0,0.5,1,2].forEach(r=>{
+    const cr=R/(1+r),cnx=cx+R-cr;
+    ctx.beginPath(); ctx.arc(cnx,cy,cr,0,2*Math.PI);
+    ctx.strokeStyle=r===1?'rgba(34,211,238,0.2)':'rgba(63,63,70,0.35)'; ctx.lineWidth=r===1?1:0.6; ctx.stroke();
+  });
+  [0.5,1,2].forEach(xv=>[1,-1].forEach(sign=>{
+    const cr=R/xv,cny=cy-sign*R/xv;
+    ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.clip();
+    ctx.beginPath(); ctx.arc(cx+R,cny,cr,0,2*Math.PI);
+    ctx.strokeStyle='rgba(63,63,70,0.3)'; ctx.lineWidth=0.6; ctx.stroke(); ctx.restore();
+  }));
+  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.strokeStyle='#27272a'; ctx.lineWidth=0.7; ctx.stroke();
+
+  function zToP(r,x){
+    const rr=Math.max(r,0);
+    const d=(rr+1)*(rr+1)+x*x;
+    if(d<1e-10) return{px:cx,py:cy};
+    return{px:cx+((rr-1)*(rr+1)+x*x)/d*R, py:cy-(2*x)/d*R};
+  }
+
+  const rN=RL/Z0,xN=XL/Z0;
+  const w=2*Math.PI*f;
+  const ptA=zToP(rN,xN);
+
+  let xMid=xN;
+  if(cn1.includes('Series')){
+    if(cu1==='nH') xMid=xN+(w*cv1*1e-9)/Z0;
+    else xMid=xN-(1/(w*cv1*1e-12*Z0));
+  } else {
+    if(cu2==='nH') xMid=xN+(w*cv2*1e-9)/Z0;
+    else xMid=xN-(1/(w*cv2*1e-12*Z0));
+  }
+  const ptB=zToP(rN,xMid);
+  const ptC=zToP(1,0);
+
+  // Path A→B (series element, constant r arc)
+  ctx.beginPath();
+  for(let i=0;i<=30;i++){
+    const xi=xN+(xMid-xN)*i/30;
+    const p=zToP(rN,xi);
+    i===0?ctx.moveTo(p.px,p.py):ctx.lineTo(p.px,p.py);
+  }
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2.5; ctx.stroke();
+
+  // Path B→C (shunt element)
+  ctx.beginPath(); ctx.moveTo(ptB.px,ptB.py); ctx.lineTo(ptC.px,ptC.py);
+  ctx.strokeStyle='#a78bfa'; ctx.lineWidth=2.5; ctx.stroke();
+
+  // Arrows
+  function arrowHead(x1,y1,x2,y2,col){
+    const a=Math.atan2(y2-y1,x2-x1);
+    ctx.fillStyle=col; ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-8*Math.cos(a-.4),y2-8*Math.sin(a-.4));
+    ctx.lineTo(x2-8*Math.cos(a+.4),y2-8*Math.sin(a+.4));
+    ctx.closePath(); ctx.fill();
+  }
+  arrowHead(ptA.px,ptA.py,ptB.px,ptB.py,'#22d3ee');
+  arrowHead(ptB.px,ptB.py,ptC.px,ptC.py,'#a78bfa');
+
+  // Points
+  [[ptA,'#fb923c','A: ZL'],[ptB,'#22d3ee','B'],[ptC,'#4ade80','C: match']].forEach(([pt,col,lbl])=>{
+    ctx.beginPath(); ctx.arc(pt.px,pt.py,5,0,2*Math.PI); ctx.fillStyle=col; ctx.fill();
+    ctx.fillStyle=col; ctx.font='9px IBM Plex Mono'; ctx.textAlign='left';
+    const lx=pt.px+8>W-55?pt.px-55:pt.px+8;
+    ctx.fillText(lbl,lx,pt.py+4);
+  });
+
+  // Legend
+  ctx.font='9px IBM Plex Mono'; ctx.textAlign='left';
+  ctx.fillStyle='#22d3ee'; ctx.fillRect(8,H-26,10,3); ctx.fillStyle='#52525b'; ctx.fillText('Series elem.',20,H-20);
+  ctx.fillStyle='#a78bfa'; ctx.fillRect(8,H-14,10,3); ctx.fillStyle='#52525b'; ctx.fillText('Shunt elem.',20,H-8);
+}
+
 /* ============================================================
-   PANEL 5: SMITH CHART
+   PANEL 5: SMITH CHART — drag + hover + VSWR regions
 ============================================================ */
-document.getElementById('smithSweep').addEventListener('change',function(){
-  document.getElementById('smithSweepFields').style.display=this.checked?'block':'none';
-  updateSmith();
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('smithSweep').addEventListener('change',function(){
+    document.getElementById('smithSweepFields').style.display=this.checked?'block':'none';
+    updateSmith();
+  });
 });
+
+// Convert canvas pixel coords → normalised Gamma (gR, gI)
+function smithPixelToGamma(cv,px,py){
+  const S=cv.width;
+  const cx=S/2,cy=S/2,R=S*0.44;
+  const gR=(px-cx)/R;
+  const gI=-(py-cy)/R;
+  return{gR,gI};
+}
+
+// Convert Gamma → normalised impedance z = r+jx
+function gammaToZ(gR,gI){
+  const d=(1-gR)*(1-gR)+gI*gI;
+  if(d<1e-10) return{r:1e6,x:0};
+  const zR=((1-gR*gR-gI*gI)/d);
+  const zI=(2*gI/d);
+  return{r:zR,x:zI};
+}
+
+function updateSmithFromGamma(gR,gI){
+  const mag=Math.sqrt(gR*gR+gI*gI);
+  if(mag>0.98){
+    // clamp to unit circle edge
+    const angle=Math.atan2(gI,gR);
+    gR=0.98*Math.cos(angle); gI=0.98*Math.sin(angle);
+  }
+  const {r,x}=gammaToZ(gR,gI);
+  const rClamped=Math.max(0,r);
+  // Update sliders & labels
+  document.getElementById('sNr').value=Math.min(rClamped*100,500);
+  document.getElementById('sNrVal').textContent=rClamped.toFixed(2);
+  document.getElementById('sNx').value=Math.min(Math.max(x*100,-200),200);
+  document.getElementById('sNxVal').textContent=(x>=0?'+':'')+x.toFixed(2);
+  updateSmith();
+}
+
+function initSmithDrag(){
+  const cv=document.getElementById('smithCanvas');
+  let dragging=false;
+
+  function evtPos(e){
+    const rect=cv.getBoundingClientRect();
+    const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
+    const cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+    const cy2=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+    return{x:cx*scaleX,y:cy2*scaleY};
+  }
+
+  function applyEvt(e){
+    const{x,y}=evtPos(e);
+    const{gR,gI}=smithPixelToGamma(cv,x,y);
+    updateSmithFromGamma(gR,gI);
+  }
+
+  cv.addEventListener('mousedown',e=>{dragging=true;applyEvt(e);});
+  cv.addEventListener('mousemove',e=>{
+    if(dragging){applyEvt(e);return;}
+    // hover readout
+    const{x,y}=evtPos(e);
+    const{gR,gI}=smithPixelToGamma(cv,x,y);
+    const mag=Math.sqrt(gR*gR+gI*gI);
+    if(mag>1){document.getElementById('smithHoverReadout').textContent='';return;}
+    const{r,x:xi}=gammaToZ(gR,gI);
+    const vswr=mag>=1?999:(1+mag)/(1-mag);
+    const rl=mag<1e-6?99:-20*Math.log10(mag);
+    document.getElementById('smithHoverReadout').textContent=
+      'z = '+Math.max(0,r).toFixed(2)+(xi>=0?'+j':'-j')+Math.abs(xi).toFixed(2)+
+      '  |Γ|='+mag.toFixed(3)+'  VSWR='+vswr.toFixed(2)+'  RL='+rl.toFixed(1)+' dB';
+  });
+  cv.addEventListener('mouseup',()=>dragging=false);
+  cv.addEventListener('mouseleave',()=>{dragging=false;document.getElementById('smithHoverReadout').textContent='';});
+  cv.addEventListener('touchstart',e=>{e.preventDefault();dragging=true;applyEvt(e);},{passive:false});
+  cv.addEventListener('touchmove',e=>{e.preventDefault();if(dragging)applyEvt(e);},{passive:false});
+  cv.addEventListener('touchend',()=>dragging=false);
+}
 
 function updateSmith(){
   const r=parseFloat(document.getElementById('sNr').value)/100;
   const x=parseFloat(document.getElementById('sNx').value)/100;
   const doSweep=document.getElementById('smithSweep').checked;
 
-  // Gamma from normalized z
   const denom=(r+1)*(r+1)+x*x;
   const gR=((r-1)*(r+1)+x*x)/denom;
   const gI=(2*x)/denom;
@@ -1199,11 +1691,11 @@ function updateSmith(){
     for(let i=1;i<=200;i++){
       const f=100e6+i*50e6;
       const w=2*Math.PI*f;
-      const zi_r=r, zi_x=w*L-1/(w*C);
+      const zi_r=r,zi_x=w*L-1/(w*C);
       const dd=(zi_r+1)*(zi_r+1)+zi_x*zi_x;
       const gRi=((zi_r-1)*(zi_r+1)+zi_x*zi_x)/dd;
       const gIi=(2*zi_x)/dd;
-      sweepPoints.push({gR:gRi,gI:gIi,f:f});
+      sweepPoints.push({gR:gRi,gI:gIi,f});
     }
   }
   drawSmith(gR,gI,sweepPoints);
@@ -1214,90 +1706,131 @@ function drawSmith(gR,gI,sweepPoints){
   const ctx=cv.getContext('2d');
   const S=Math.min(cv.offsetWidth,cv.offsetHeight)||500;
   cv.width=S; cv.height=S;
-  const cx=S/2, cy=S/2, R=S*0.44;
-
+  const cx=S/2,cy=S/2,R=S*0.44;
   ctx.clearRect(0,0,S,S);
 
-  // Background circle
-  ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI);
-  ctx.strokeStyle='#3f3f46'; ctx.lineWidth=1; ctx.stroke();
-  ctx.fillStyle='rgba(17,17,19,0.7)'; ctx.fill();
-
-  // Constant resistance circles: r=0,0.5,1,2,5
-  const rcircs=[0,0.2,0.5,1,2,5];
-  rcircs.forEach(r=>{
-    const cr=R/(1+r), cnx=cx+R-cr;
-    ctx.beginPath(); ctx.arc(cnx,cy,cr,0,2*Math.PI);
-    ctx.strokeStyle=r===1?'rgba(34,211,238,0.3)':'rgba(63,63,70,0.6)';
-    ctx.lineWidth=r===1?1.5:0.7; ctx.stroke();
-    if(r>0){ctx.fillStyle='#52525b';ctx.font='9px IBM Plex Mono';ctx.fillText('r='+r,cnx+cr-16,cy+9);}
+  // ── VSWR colour regions (filled, clipped to unit circle) ──
+  const regionData=[
+    {g:1.00,color:'rgba(248,113,113,0.10)'},  // VSWR > 3  (red)   outermost
+    {g:0.333,color:'rgba(251,191,36,0.12)'},  // VSWR 1.5–3 (amber)
+    {g:0.200,color:'rgba(74,222,128,0.12)'},  // VSWR < 1.5 (green) innermost
+  ];
+  regionData.forEach(({g,color})=>{
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.clip();
+    ctx.beginPath(); ctx.arc(cx,cy,R*g,0,2*Math.PI);
+    ctx.fillStyle=color; ctx.fill();
+    ctx.restore();
   });
 
-  // Constant reactance arcs: x=±0.5,±1,±2,±5
-  const xcircs=[0.5,1,2,5];
-  xcircs.forEach(x=>{
+  // ── Outer unit circle ──
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI);
+  ctx.strokeStyle='#3f3f46'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // ── Constant-r circles ──
+  [0,0.2,0.5,1,2,5].forEach(r=>{
+    const cr=R/(1+r),cnx=cx+R-cr;
+    ctx.beginPath(); ctx.arc(cnx,cy,cr,0,2*Math.PI);
+    ctx.strokeStyle=r===1?'rgba(34,211,238,0.35)':'rgba(63,63,70,0.55)';
+    ctx.lineWidth=r===1?1.5:0.7; ctx.stroke();
+    if(r>0&&r<5){
+      ctx.fillStyle='#52525b'; ctx.font='9px IBM Plex Mono'; ctx.textAlign='left';
+      ctx.fillText('r='+r,cnx+cr-22,cy+10);
+    }
+  });
+
+  // ── Constant-x arcs ──
+  [0.5,1,2,5].forEach(xv=>{
     [1,-1].forEach(sign=>{
-      const cr=R/x, cny=cy-sign*R/x;
-      ctx.beginPath();
-      ctx.arc(cx+R,cny,cr,0,2*Math.PI);
-      ctx.strokeStyle='rgba(63,63,70,0.5)'; ctx.lineWidth=0.7;
+      const cr=R/xv,cny=cy-sign*R/xv;
       ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.clip();
-      ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.arc(cx+R,cny,cr,0,2*Math.PI);
+      ctx.strokeStyle='rgba(63,63,70,0.45)'; ctx.lineWidth=0.7; ctx.stroke();
+      ctx.restore();
+      // x-labels near real axis crossing
+      if(xv<=2){
+        const lx=cx+R-2*cr+4,ly=cy-sign*12;
+        ctx.fillStyle='#3f3f46'; ctx.font='9px IBM Plex Mono'; ctx.textAlign='left';
+        ctx.fillText((sign>0?'x=+':'x=-')+xv,lx,ly);
+      }
     });
   });
 
-  // Real axis
+  // ── Real axis ──
   ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy);
   ctx.strokeStyle='#3f3f46'; ctx.lineWidth=0.7; ctx.stroke();
 
-  // VSWR circles
-  [0.333,0.2,0.1].forEach((g,i)=>{
+  // ── VSWR reference circles (dashed) ──
+  [{g:0.333,c:'rgba(251,191,36,0.5)',l:'VSWR=2'},{g:0.200,c:'rgba(74,222,128,0.5)',l:'VSWR=1.5'}].forEach(({g,c,l})=>{
     ctx.beginPath(); ctx.arc(cx,cy,R*g,0,2*Math.PI);
-    ctx.strokeStyle=['rgba(248,113,113,0.2)','rgba(251,191,36,0.2)','rgba(74,222,128,0.2)'][i];
-    ctx.lineWidth=1; ctx.setLineDash([3,4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle=c; ctx.lineWidth=1; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=c; ctx.font='9px IBM Plex Mono'; ctx.textAlign='left';
+    ctx.fillText(l,cx+R*g+3,cy-4);
   });
 
-  // Sweep trace
+  // ── Sweep locus ──
   if(sweepPoints&&sweepPoints.length){
-    ctx.beginPath();
-    sweepPoints.forEach((p,i)=>{
-      const px=cx+p.gR*R, py=cy-p.gI*R;
-      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
-    });
-    ctx.strokeStyle='rgba(167,139,250,0.7)'; ctx.lineWidth=1.5; ctx.stroke();
-    // Dots at key frequencies
-    [0,50,100,150,199].forEach(i=>{
-      if(sweepPoints[i]){
-        const p=sweepPoints[i];
-        ctx.beginPath(); ctx.arc(cx+p.gR*R,cy-p.gI*R,3,0,2*Math.PI);
-        ctx.fillStyle='#a78bfa'; ctx.fill();
-      }
+    // animated colour gradient along locus: purple→cyan
+    for(let i=0;i<sweepPoints.length-1;i++){
+      const t=i/sweepPoints.length;
+      const p=sweepPoints[i],q=sweepPoints[i+1];
+      ctx.beginPath();
+      ctx.moveTo(cx+p.gR*R,cy-p.gI*R);
+      ctx.lineTo(cx+q.gR*R,cy-q.gI*R);
+      const r2=Math.round(167+t*(34-167)),g2=Math.round(139+t*(211-139)),b2=Math.round(250+t*(238-250));
+      ctx.strokeStyle=`rgb(${r2},${g2},${b2})`; ctx.lineWidth=1.8; ctx.stroke();
+    }
+    // freq labels at key points
+    [0,49,99,149,199].forEach((i,n)=>{
+      if(!sweepPoints[i]) return;
+      const p=sweepPoints[i];
+      const px2=cx+p.gR*R,py2=cy-p.gI*R;
+      ctx.beginPath(); ctx.arc(px2,py2,3,0,2*Math.PI);
+      ctx.fillStyle='#a78bfa'; ctx.fill();
+      ctx.fillStyle='#52525b'; ctx.font='8px IBM Plex Mono'; ctx.textAlign='center';
+      ctx.fillText(((p.f)/1e9).toFixed(1)+'G',px2,py2-6);
     });
   }
 
-  // Current point
-  const px=cx+gR*R, py=cy-gI*R;
+  // ── Current point ──
+  const px=cx+gR*R,py=cy-gI*R;
+  const gamma=Math.sqrt(gR*gR+gI*gI);
+  const ptColor=gamma<0.2?'#4ade80':gamma<0.333?'#fbbf24':'#f87171';
 
-  // Cross hairs (faint)
-  ctx.strokeStyle='rgba(34,211,238,0.15)'; ctx.lineWidth=1;
+  // Crosshairs
+  ctx.strokeStyle='rgba(34,211,238,0.12)'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(px,cy-R); ctx.lineTo(px,cy+R); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx-R,py); ctx.lineTo(cx+R,py); ctx.stroke();
 
-  // Point ring
-  ctx.beginPath(); ctx.arc(px,py,8,0,2*Math.PI);
-  ctx.strokeStyle='rgba(34,211,238,0.4)'; ctx.lineWidth=1; ctx.stroke();
+  // Outer glow ring
+  ctx.beginPath(); ctx.arc(px,py,12,0,2*Math.PI);
+  ctx.strokeStyle=ptColor.replace(')',',0.2)').replace('rgb','rgba'); ctx.lineWidth=6; ctx.stroke();
+  // Inner ring
+  ctx.beginPath(); ctx.arc(px,py,7,0,2*Math.PI);
+  ctx.strokeStyle=ptColor+'88'; ctx.lineWidth=1.5; ctx.stroke();
+  // Centre dot
   ctx.beginPath(); ctx.arc(px,py,4,0,2*Math.PI);
-  ctx.fillStyle='#22d3ee'; ctx.fill();
+  ctx.fillStyle=ptColor; ctx.fill();
 
-  // Center dot
+  // Centre of chart
   ctx.beginPath(); ctx.arc(cx,cy,3,0,2*Math.PI);
   ctx.fillStyle='#52525b'; ctx.fill();
 
-  // Labels
-  ctx.fillStyle='#52525b'; ctx.font='10px IBM Plex Mono'; ctx.textAlign='center';
-  ctx.fillText('Γ=0 (matched)',cx,cy+R+16);
-  ctx.fillText('Short (Γ=-1)',cx-R,cy+12);
-  ctx.fillText('Open (Γ=+1)',cx+R,cy+12);
+  // Corner labels
+  ctx.fillStyle='#3f3f46'; ctx.font='9px IBM Plex Mono'; ctx.textAlign='center';
+  ctx.fillText('matched',cx,cy+R+14);
+  ctx.textAlign='right'; ctx.fillText('short',cx-R+4,cy+11);
+  ctx.textAlign='left';  ctx.fillText('open',cx+R-4,cy+11);
+
+  // Region legend
+  ctx.font='8px IBM Plex Mono'; ctx.textAlign='left';
+  [[cx-R+4,cy-R+10,'rgba(74,222,128,0.7)','VSWR<1.5'],
+   [cx-R+4,cy-R+22,'rgba(251,191,36,0.7)','VSWR<3'],
+   [cx-R+4,cy-R+34,'rgba(248,113,113,0.7)','VSWR>3']
+  ].forEach(([lx,ly,c,t])=>{
+    ctx.fillStyle=c; ctx.fillRect(lx,ly-7,8,8);
+    ctx.fillStyle='#52525b'; ctx.fillText(t,lx+11,ly);
+  });
 }
 
 /* ============================================================
@@ -1376,8 +1909,165 @@ function setLearnLevel(idx,btn){
 }
 
 /* ============================================================
-   INIT
+   SWEEP: CLICK-TO-PIN ANNOTATIONS
 ============================================================ */
+let sweepPins=[];
+
+function initSweepPins(){
+  ['vswrChart','rlChart','gammaChart'].forEach((id,ci)=>{
+    const canvas=document.getElementById(id);
+    if(!canvas) return;
+    canvas.style.cursor='crosshair';
+    canvas.addEventListener('click',e=>{
+      const chart=canvas._chart;
+      if(!chart||!lastSweepData) return;
+      const rect=canvas.getBoundingClientRect();
+      const x=e.clientX-rect.left;
+      const area=chart.chartArea;
+      const frac=Math.max(0,Math.min(1,(x-area.left)/(area.right-area.left)));
+      const{freqs,vswrArr,rlArr,gammaArr}=lastSweepData;
+      const idx=Math.min(Math.floor(frac*(freqs.length-1)),freqs.length-1);
+      sweepPins.push({frac,freq:parseFloat(freqs[idx]),vswr:vswrArr[idx],rl:rlArr[idx],gamma:gammaArr[idx]});
+      drawAllPins();
+      const info=`Pin ${sweepPins.length}: ${parseFloat(freqs[idx]).toFixed(1)} MHz | VSWR=${vswrArr[idx].toFixed(2)} | RL=${rlArr[idx].toFixed(1)}dB | |Γ|=${gammaArr[idx].toFixed(3)}`;
+      document.getElementById('pinReadout').textContent=info;
+    });
+  });
+}
+
+function drawAllPins(){
+  [1,2,3].forEach(n=>{
+    const ov=document.getElementById('pinOverlay'+n);
+    if(!ov) return;
+    const chartId=['vswrChart','rlChart','gammaChart'][n-1];
+    const chart=document.getElementById(chartId)._chart;
+    if(!chart) return;
+    const W=ov.offsetWidth,H=ov.offsetHeight;
+    ov.width=W; ov.height=H;
+    const ctx=ov.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    const area=chart.chartArea;
+    if(!area) return;
+    const vals=['vswr','rl','gamma'];
+    const key=vals[n-1];
+    sweepPins.forEach((pin,i)=>{
+      const sx=area.left+(area.right-area.left)*pin.frac;
+      ctx.strokeStyle='rgba(251,191,36,0.7)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(sx,area.top); ctx.lineTo(sx,area.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(sx,area.top+16,7,0,2*Math.PI);
+      ctx.fillStyle='rgba(251,191,36,0.85)'; ctx.fill();
+      ctx.fillStyle='#09090b'; ctx.font='bold 9px IBM Plex Mono'; ctx.textAlign='center';
+      ctx.fillText(i+1,sx,area.top+20);
+      ctx.fillStyle='rgba(251,191,36,0.9)'; ctx.font='9px IBM Plex Mono'; ctx.textAlign='left';
+      const val=pin[key];
+      ctx.fillText(typeof val==='number'?val.toFixed(2):'',sx+4,area.top+32);
+    });
+  });
+}
+
+function clearPins(){
+  sweepPins=[];
+  [1,2,3].forEach(n=>{
+    const ov=document.getElementById('pinOverlay'+n);
+    if(ov){const ctx=ov.getContext('2d');ctx.clearRect(0,0,ov.width,ov.height);}
+  });
+  document.getElementById('pinReadout').textContent='';
+}
+
+/* ============================================================
+   PANEL 6: GUIDED WALKTHROUGH
+============================================================ */
+const GUIDE_STEPS=[
+  {title:'Welcome to the RF Design Lab',
+   body:'This guided tour walks you through the core concepts of RF impedance matching, with live demos at each step. Click NEXT to begin.',
+   action:null,tab:null},
+  {title:'Step 1 — What is impedance?',
+   body:'Impedance Z = R + jX is the total opposition to AC signals. The real part R dissipates energy. The imaginary part X stores it. Go to the Impedance tab and set R=50, X=0.',
+   action:{label:'Go to Impedance tab →',fn:()=>document.querySelector('.tab').click()},
+   tab:'impedance',preset:[50,0]},
+  {title:'Step 2 — Perfect match',
+   body:'With R=50Ω, X=0 and Z₀=50Ω, VSWR=1.00 and Return Loss=∞. All power is delivered. The phasor arrow points directly along the real axis.',
+   action:{label:'Set perfect match',fn:()=>setPreset(50,0)},
+   tab:'impedance',preset:[50,0]},
+  {title:'Step 3 — Create a mismatch',
+   body:'Change R to 150Ω. VSWR jumps above 1.5 — you\'ve introduced a resistive mismatch. Watch the Γ angle stay at 0° because there\'s no reactance.',
+   action:{label:'Set R=150Ω mismatch',fn:()=>setPreset(150,0)},
+   tab:'impedance',preset:[150,0]},
+  {title:'Step 4 — Add reactance',
+   body:'Now set R=75, X=+40 (inductive load). The phasor tilts upward. VSWR worsens further. The AI diagnoses it as inductive and suggests a series capacitor fix.',
+   action:{label:'Set inductive load',fn:()=>setPreset(75,40)},
+   tab:'impedance',preset:[75,40]},
+  {title:'Step 5 — Frequency sweep',
+   body:'On the Sweep tab, select Series RLC with R=50, L=10nH, C=10pF. Watch the VSWR dip at resonance — that\'s where XL=XC and the load looks purely resistive.',
+   action:{label:'Go to Sweep tab →',fn:()=>document.querySelectorAll('.tab')[1].click()},
+   tab:'sweep'},
+  {title:'Step 6 — Wave physics',
+   body:'On the Wave tab, try the three termination modes: Matched (no standing wave), Open (voltage maximum at load), Short (voltage node at load with phase reversal).',
+   action:{label:'Go to Wave tab →',fn:()=>document.querySelectorAll('.tab')[2].click()},
+   tab:'wave'},
+  {title:'Step 7 — Auto-matching',
+   body:'On the Matching tab, enter RL=150, XL=0, Z₀=50. The L-network calculates exact component values. Toggle ±5% tolerance to see the VSWR worst-case band.',
+   action:{label:'Go to Matching tab →',fn:()=>document.querySelectorAll('.tab')[3].click()},
+   tab:'match'},
+  {title:'Step 8 — Smith Chart mastery',
+   body:'On the Smith Chart, drag the point around. The coloured regions show VSWR zones. Enable the frequency sweep locus to see how a reactive load spirals with frequency.',
+   action:{label:'Go to Smith Chart →',fn:()=>document.querySelectorAll('.tab')[4].click()},
+   tab:'smith'},
+  {title:'Tour complete!',
+   body:'You\'ve covered impedance, VSWR, frequency response, standing waves, matching circuits and the Smith Chart. You\'re ready to design real RF systems. Good luck!',
+   action:null,tab:null},
+];
+
+let guideIdx=0;
+
+function startGuide(){
+  guideIdx=0;
+  document.getElementById('learnContent').style.display='none';
+  document.getElementById('guideOverlay').style.display='block';
+  document.querySelectorAll('.learn-level-btn:not(#llbGuide)').forEach(b=>b.classList.remove('active'));
+  renderGuideStep();
+}
+
+function stopGuide(){
+  document.getElementById('guideOverlay').style.display='none';
+  document.getElementById('learnContent').style.display='block';
+  setLearnLevel(0,document.getElementById('llb0'));
+}
+
+function guideStep(dir){
+  guideIdx=Math.max(0,Math.min(GUIDE_STEPS.length-1,guideIdx+dir));
+  renderGuideStep();
+}
+
+function renderGuideStep(){
+  const step=GUIDE_STEPS[guideIdx];
+  const total=GUIDE_STEPS.length;
+
+  // Dots
+  const dots=document.getElementById('guideDots');
+  dots.innerHTML=Array.from({length:total},(_,i)=>
+    `<div style="width:${i===guideIdx?16:6}px;height:6px;border-radius:3px;background:${i===guideIdx?'var(--acc)':'var(--border2)'};transition:width .2s"></div>`
+  ).join('');
+
+  // Next/Finish button
+  const btn=document.getElementById('guideNextBtn');
+  btn.textContent=guideIdx===total-1?'FINISH':'NEXT →';
+  if(guideIdx===total-1) btn.onclick=stopGuide;
+  else btn.onclick=()=>guideStep(1);
+
+  document.getElementById('guideContent').innerHTML=
+    `<h3 style="margin-bottom:8px">${step.title}</h3>${step.body}`;
+
+  // Action button
+  const actionDiv=document.getElementById('guideAction');
+  if(step.action){
+    actionDiv.innerHTML=`<button class="btn primary" style="font-size:11px;padding:6px 14px" onclick="(${step.action.fn.toString()})()">${step.action.label}</button>`;
+    if(step.preset) actionDiv.innerHTML+=` <span style="font-size:10px;color:var(--t3);margin-left:8px">or set manually on the tab</span>`;
+  } else {
+    actionDiv.innerHTML='';
+  }
+}
 window.addEventListener('load',()=>{
   calcImpedance();
   setLearnLevel(0, document.querySelector('.learn-level-btn'));
@@ -1385,11 +2075,17 @@ window.addEventListener('load',()=>{
   updateSmith();
   runSweep();
   calcMatch();
-  // Redraw on resize
+
+  initPhasorDrag();
+  initSmithDrag();
+  initSweepPins();
+
   window.addEventListener('resize',()=>{
     calcImpedance();
     updateSmith();
     drawWave();
+    calcMatch();
+    setTimeout(()=>{drawMarkerOverlays();drawAllPins();},80);
   });
 });
 </script>
