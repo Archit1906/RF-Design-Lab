@@ -141,6 +141,11 @@ select:focus{border-color:var(--acc-border)}
 .preset-btn:hover{border-color:var(--acc-border);color:var(--acc);background:var(--acc-dim)}
 .preset-btn strong{display:block;color:var(--t1);font-size:10px;margin-bottom:2px}
 
+/* GLOSSARY TOOLTIP */
+.glossary-term{border-bottom:1px dotted var(--border2);cursor:help;color:inherit}
+#glossaryTip{position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--acc-border);border-radius:6px;padding:8px 12px;max-width:260px;font-size:11px;line-height:1.6;color:var(--t2);pointer-events:none;display:none;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+#glossaryTip strong{color:var(--acc);display:block;margin-bottom:2px;font-size:12px}
+
 /* RESPONSIVE */
 @media(max-width:800px){
   .panel-grid-2,.panel-grid-3{grid-template-columns:1fr}
@@ -452,9 +457,27 @@ select:focus{border-color:var(--acc-border)}
     </div>
 
     <div class="card" style="height:fit-content">
-      <div class="card-title">Transmission Line Visualization</div>
-      <canvas id="waveCanvas" height="400"></canvas>
-      <div style="margin-top:10px;font-size:10px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
+      <div class="card-title">
+        Transmission Line Visualization
+        <span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:400">CLICK TO INSPECT · DRAG MARKERS</span>
+      </div>
+      <div style="position:relative;display:inline-block;width:100%">
+        <canvas id="waveCanvas" height="400" style="display:block;width:100%"></canvas>
+        <canvas id="waveOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
+      </div>
+      <!-- Click inspector readout -->
+      <div id="waveInspector" style="margin-top:8px;font-size:11px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 12px;min-height:38px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px">
+        <div style="color:var(--t3);font-size:10px">Click wave to inspect position</div>
+      </div>
+      <!-- VSWR marker controls -->
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--t3)">VSWR markers:</span>
+        <button class="btn" id="wMark1Btn" onclick="placeMarker(1)" style="font-size:10px;padding:4px 10px;border-color:rgba(34,211,238,0.4);color:var(--acc)">SET M1</button>
+        <button class="btn" id="wMark2Btn" onclick="placeMarker(2)" style="font-size:10px;padding:4px 10px;border-color:rgba(251,191,36,0.4);color:var(--yellow)">SET M2</button>
+        <button class="btn" onclick="clearMarkers()" style="font-size:10px;padding:4px 10px">CLR</button>
+        <div id="wMarkerReadout" style="font-size:10px;color:var(--t2);flex:1"></div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
         <span>● Nodes (zero amplitude)</span>
         <span>● Antinodes (max amplitude)</span>
       </div>
@@ -628,7 +651,9 @@ select:focus{border-color:var(--acc-border)}
 
     <div>
       <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Quick Reference</div>
+        <div class="card-title">Quick Reference
+          <button onclick="printCheatSheet()" class="btn" style="margin-left:auto;font-size:10px;padding:3px 10px">⎙ PRINT</button>
+        </div>
         <div style="font-size:11px;color:var(--t2);line-height:2">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">
             <div>VSWR = 1</div><div style="color:var(--green)">Perfect match</div>
@@ -683,6 +708,9 @@ select:focus{border-color:var(--acc-border)}
 
 </div><!-- /content -->
 </div><!-- /shell -->
+
+<!-- GLOSSARY TOOLTIP -->
+<div id="glossaryTip"></div>
 
 <script>
 /* ============================================================
@@ -1909,8 +1937,366 @@ function setLearnLevel(idx,btn){
 }
 
 /* ============================================================
-   SWEEP: CLICK-TO-PIN ANNOTATIONS
+   WAVE: CLICK INSPECTOR + VSWR MEASUREMENT MARKERS
 ============================================================ */
+let waveMarkers={1:null,2:null};  // positions as fraction 0–1 along line
+let nextMarkerToPlace=null;       // 1 or 2 — which marker clicks place next
+
+function placeMarker(n){
+  nextMarkerToPlace=n;
+  const btn=document.getElementById('wMark'+(n===1?1:2)+'Btn');
+  document.getElementById('wMark1Btn').style.fontWeight=(n===1?'700':'400');
+  document.getElementById('wMark2Btn').style.fontWeight=(n===2?'700':'400');
+  document.getElementById('wMarkerReadout').textContent='Click on the wave to place M'+n+'…';
+}
+
+function clearMarkers(){
+  waveMarkers={1:null,2:null};
+  nextMarkerToPlace=null;
+  document.getElementById('wMark1Btn').style.fontWeight='400';
+  document.getElementById('wMark2Btn').style.fontWeight='400';
+  document.getElementById('wMarkerReadout').textContent='';
+  drawWaveOverlay();
+}
+
+function initWaveInteraction(){
+  const cv=document.getElementById('waveCanvas');
+
+  cv.addEventListener('click',e=>{
+    const rect=cv.getBoundingClientRect();
+    const x=(e.clientX-rect.left)*(cv.width/rect.width);
+    const ox=40,ow=cv.width-80;
+    const frac=Math.max(0,Math.min(1,(x-ox)/ow));
+
+    if(nextMarkerToPlace){
+      waveMarkers[nextMarkerToPlace]=frac;
+      nextMarkerToPlace=null;
+      document.getElementById('wMark1Btn').style.fontWeight='400';
+      document.getElementById('wMark2Btn').style.fontWeight='400';
+      updateMarkerReadout();
+      drawWaveOverlay();
+      return;
+    }
+
+    // Inspector: show V, I, Z at this position
+    const gamma=parseFloat(document.getElementById('wGamma').value)/100;
+    const refSign=(wTermMode==='short')?-1:1;
+    const userPhase=parseFloat(document.getElementById('wPhase').value)*Math.PI/180;
+    // Voltage standing wave: |V(x)| = |1 + Γ·e^(j2βx)| (simplified envelope)
+    const vFwd=Math.cos(2*Math.PI*frac+userPhase);
+    const vRef=gamma*refSign*Math.cos(2*Math.PI*(1-frac)+userPhase);
+    const vTotal=vFwd+vRef;
+    const iTotal=vFwd-vRef; // current is complementary
+    // Local impedance at this point (normalised, simplified)
+    const zNorm=Math.abs(vTotal)<0.001?Infinity:Math.abs(vTotal)/Math.abs(iTotal);
+    const Z0=50;
+    const freqMHz=parseFloat(document.getElementById('wFreq').value);
+    const lambda=300/freqMHz;
+    const posMeters=(frac*lambda).toFixed(3);
+    const posLambda=(frac).toFixed(3);
+
+    const ins=document.getElementById('waveInspector');
+    const col=v=>v>0?'var(--green)':'var(--red)';
+    ins.innerHTML=
+      `<div><div style="font-size:9px;color:var(--t3)">Position</div><div style="color:var(--acc)">${posMeters} m (${posLambda}λ)</div></div>`+
+      `<div><div style="font-size:9px;color:var(--t3)">V (norm.)</div><div style="color:${col(vTotal)}">${vTotal.toFixed(3)}</div></div>`+
+      `<div><div style="font-size:9px;color:var(--t3)">I (norm.)</div><div style="color:${col(iTotal)}">${iTotal.toFixed(3)}</div></div>`+
+      `<div><div style="font-size:9px;color:var(--t3)">|Z| (Ω)</div><div style="color:var(--yellow)">${isFinite(zNorm)?(zNorm*Z0).toFixed(1)+' Ω':'∞'}</div></div>`;
+
+    // Draw inspection dot on overlay
+    drawWaveOverlay(frac);
+  });
+
+  // Hover: live readout without click
+  cv.addEventListener('mousemove',e=>{
+    if(nextMarkerToPlace) cv.style.cursor='crosshair';
+    else cv.style.cursor='pointer';
+  });
+}
+
+function updateMarkerReadout(){
+  const m1=waveMarkers[1],m2=waveMarkers[2];
+  if(m1===null||m2===null){
+    if(m1!==null||m2!==null){
+      const set=m1!==null?1:2;
+      document.getElementById('wMarkerReadout').textContent='M'+set+' placed. Place M'+(3-set)+' to measure.';
+    }
+    return;
+  }
+  const gamma=parseFloat(document.getElementById('wGamma').value)/100;
+  const vswr=(1+gamma)/(1-gamma+1e-10);
+  const freqMHz=parseFloat(document.getElementById('wFreq').value);
+  const lambda=300/freqMHz;
+  const dist=Math.abs(m2-m1);
+  const distM=(dist*lambda).toFixed(3);
+  const distLambda=dist.toFixed(3);
+  // VSWR from envelope at markers
+  const refSign=(wTermMode==='short')?-1:1;
+  function env(frac){
+    const v1=Math.cos(2*Math.PI*frac);
+    const v2=gamma*refSign*Math.cos(2*Math.PI*(1-frac));
+    return Math.abs(v1+v2);
+  }
+  const e1=env(m1),e2=env(m2);
+  const vmax=Math.max(e1,e2),vmin=Math.min(e1,e2)+0.001;
+  const measVSWR=(vmax/vmin).toFixed(3);
+  document.getElementById('wMarkerReadout').innerHTML=
+    `M1→M2: <span style="color:var(--acc)">${distM} m</span> (${distLambda}λ) &nbsp;|&nbsp; `+
+    `Env ratio: <span style="color:var(--yellow)">${measVSWR}</span> &nbsp;|&nbsp; `+
+    `True VSWR: <span style="color:var(--green)">${vswr.toFixed(3)}</span>`;
+}
+
+function drawWaveOverlay(inspectFrac){
+  const ov=document.getElementById('waveOverlay');
+  if(!ov) return;
+  const W=ov.offsetWidth||600,H=ov.offsetHeight||400;
+  ov.width=W; ov.height=H;
+  const ctx=ov.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  const ox=40,ow=W-80,midY=H/2;
+
+  // Draw VSWR markers
+  const colors=['#22d3ee','#fbbf24'];
+  [1,2].forEach(n=>{
+    const frac=waveMarkers[n];
+    if(frac===null) return;
+    const x=ox+frac*ow;
+    const col=colors[n-1];
+    ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x,midY,5,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle=col; ctx.font='bold 10px IBM Plex Mono'; ctx.textAlign='center';
+    ctx.fillText('M'+n,x,14);
+  });
+
+  // Draw connecting band between markers if both set
+  if(waveMarkers[1]!==null&&waveMarkers[2]!==null){
+    const x1=ox+waveMarkers[1]*ow,x2=ox+waveMarkers[2]*ow;
+    ctx.fillStyle='rgba(251,191,36,0.06)';
+    ctx.fillRect(Math.min(x1,x2),0,Math.abs(x2-x1),H);
+  }
+
+  // Draw inspection dot
+  if(inspectFrac!==undefined){
+    const x=ox+inspectFrac*ow;
+    ctx.beginPath(); ctx.arc(x,midY,8,0,2*Math.PI);
+    ctx.strokeStyle='rgba(251,191,36,0.8)'; ctx.lineWidth=2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,midY,3,0,2*Math.PI);
+    ctx.fillStyle='#fbbf24'; ctx.fill();
+  }
+}
+
+/* ============================================================
+   HOVER GLOSSARY — works on all tabs
+============================================================ */
+const GLOSSARY={
+  'VSWR':'Voltage Standing Wave Ratio. Ratio of max to min voltage on a transmission line. VSWR=1 is perfect match; higher = more mismatch.',
+  'vswr':'Voltage Standing Wave Ratio. Ratio of max to min voltage on a transmission line. VSWR=1 is perfect match; higher = more mismatch.',
+  'Γ':'Reflection coefficient (Gamma). Complex number describing how much of a signal is reflected at an impedance discontinuity. |Γ| ranges 0 (matched) to 1 (total reflection).',
+  'Gamma':'Reflection coefficient. Complex number |Γ|∠θ. Magnitude = fraction of voltage reflected; angle = phase shift on reflection.',
+  'Return Loss':'Power reflected expressed in dB. RL = −20·log|Γ|. Higher is better — >20 dB is excellent.',
+  'RL':'Return Loss. Power reflected expressed in dB. RL = −20·log|Γ|. Higher is better — >20 dB is excellent.',
+  'Impedance':'Opposition to AC current flow. Z = R + jX. R is resistance (dissipates energy), X is reactance (stores energy).',
+  'impedance':'Opposition to AC current flow. Z = R + jX. R is resistance (dissipates energy), X is reactance (stores energy).',
+  'reactance':'Imaginary part of impedance. Positive X = inductive (L), negative X = capacitive (C). Reactance changes with frequency.',
+  'Reactance':'Imaginary part of impedance. Positive X = inductive (L), negative X = capacitive (C). Reactance changes with frequency.',
+  'Smith Chart':'Circular chart mapping normalised impedance to the reflection coefficient plane. The centre = perfect match; edge = total reflection.',
+  'L-network':'Two-element matching network (one series + one shunt component). Can match any two resistive impedances. Q = √(Rhigh/Rlow − 1).',
+  'Q factor':'Quality factor of a matching network. Q = √(Rhigh/Rlow−1). Higher Q = narrower bandwidth but more sensitive to tolerance.',
+  'resonance':'Frequency where XL = XC, so they cancel and load looks purely resistive. f₀ = 1/(2π√LC).',
+  'mismatch':'When source and load impedances differ, causing partial signal reflection. Measured by VSWR or Return Loss.',
+  'Z₀':'Characteristic impedance of a transmission line or system reference. Standard is 50Ω for RF; 75Ω for cable TV.',
+  'ZL':'Load impedance — the complex impedance of the device being driven (antenna, amplifier input, etc.).',
+  'node':'Point of zero voltage amplitude on a standing wave. Occurs at multiples of λ/2 from a short-circuit termination.',
+  'antinode':'Point of maximum voltage amplitude on a standing wave. Occurs at odd multiples of λ/4 from a short-circuit termination.',
+  'E12':'Standard resistor/capacitor value series with 12 values per decade (1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2).',
+  'tolerance':'Component value accuracy. ±5% means actual value is within 5% of nominal. Affects matching network VSWR in practice.',
+  'inductive':'Load with positive reactance (X > 0). Stores energy in a magnetic field. Fix: add series capacitor to cancel.',
+  'capacitive':'Load with negative reactance (X < 0). Stores energy in an electric field. Fix: add series inductor to cancel.',
+  'bandwidth':'Frequency range over which VSWR stays below 2:1. BW ≈ f₀/Q for a matched L-network.',
+};
+
+function initGlossary(){
+  const tip=document.getElementById('glossaryTip');
+
+  // Walk all text nodes and wrap glossary terms
+  function wrapTerms(root){
+    const terms=Object.keys(GLOSSARY).sort((a,b)=>b.length-a.length);
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null,false);
+    const nodes=[];
+    let node;
+    while(node=walker.nextNode()){
+      if(['SCRIPT','STYLE','INPUT','SELECT','TEXTAREA'].includes(node.parentNode.tagName)) continue;
+      if(node.parentNode.classList&&node.parentNode.classList.contains('glossary-term')) continue;
+      nodes.push(node);
+    }
+    nodes.forEach(n=>{
+      let html=n.textContent;
+      let replaced=false;
+      terms.forEach(term=>{
+        const re=new RegExp('\\b('+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')\\b','g');
+        if(re.test(html)){
+          html=html.replace(re,`<span class="glossary-term" data-term="${term}">$1</span>`);
+          replaced=true;
+        }
+      });
+      if(replaced){
+        const span=document.createElement('span');
+        span.innerHTML=html;
+        n.parentNode.replaceChild(span,n);
+      }
+    });
+  }
+
+  // Wrap terms in metric labels and card titles
+  document.querySelectorAll('.metric-name,.card-title,.field-label,.ai-msg,.learn-content,.sweep-chip,.wterm-btn').forEach(el=>{
+    try{wrapTerms(el);}catch(e){}
+  });
+
+  // Tooltip show/hide
+  document.addEventListener('mouseover',e=>{
+    const t=e.target.closest('.glossary-term');
+    if(!t) return;
+    const term=t.getAttribute('data-term');
+    if(!GLOSSARY[term]) return;
+    tip.innerHTML=`<strong>${term}</strong>${GLOSSARY[term]}`;
+    tip.style.display='block';
+  });
+  document.addEventListener('mousemove',e=>{
+    if(tip.style.display==='none') return;
+    const margin=12;
+    let left=e.clientX+margin;
+    let top=e.clientY+margin;
+    if(left+270>window.innerWidth) left=e.clientX-270-margin;
+    if(top+120>window.innerHeight) top=e.clientY-120-margin;
+    tip.style.left=left+'px';
+    tip.style.top=top+'px';
+  });
+  document.addEventListener('mouseout',e=>{
+    if(!e.target.closest('.glossary-term')) return;
+    tip.style.display='none';
+  });
+}
+
+/* ============================================================
+   PRINTABLE CHEAT SHEET
+============================================================ */
+function printCheatSheet(){
+  const win=window.open('','_blank','width=800,height=900');
+  win.document.write(`<!DOCTYPE html><html><head><title>RF Design Lab — Cheat Sheet</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Mono',monospace;background:#fff;color:#111;padding:32px;font-size:12px}
+h1{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#09090b;margin-bottom:4px}
+.sub{font-size:11px;color:#666;margin-bottom:28px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.section{margin-bottom:20px}
+h2{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid #e5e5e5}
+.formula{background:#f8f8f8;border-left:3px solid #22d3ee;padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:6px;font-size:12px;color:#09090b}
+.formula .name{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:2px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+td{padding:5px 8px;border-bottom:1px solid #f0f0f0}
+td:first-child{color:#666;width:45%}
+td:last-child{font-weight:600}
+.good{color:#16a34a}.warn{color:#ca8a04}.bad{color:#dc2626}
+.smith-note{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;font-size:11px;color:#166534;margin-top:8px;line-height:1.7}
+.footer{margin-top:24px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:12px;text-align:center}
+@media print{body{padding:16px}.no-print{display:none}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@800&display=swap" rel="stylesheet">
+</head><body>
+<h1>RF Design Lab</h1>
+<div class="sub">Quick Reference Cheat Sheet — generated ${new Date().toLocaleDateString()}</div>
+<button class="no-print" onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;background:#22d3ee;border:none;border-radius:4px;font-family:monospace;cursor:pointer;font-weight:600">Print / Save as PDF</button>
+
+<div class="grid">
+<div>
+  <div class="section">
+    <h2>Core Formulas</h2>
+    <div class="formula"><div class="name">Reflection Coefficient</div>Γ = (ZL − Z₀) / (ZL + Z₀)</div>
+    <div class="formula"><div class="name">VSWR</div>VSWR = (1 + |Γ|) / (1 − |Γ|)</div>
+    <div class="formula"><div class="name">Return Loss</div>RL = −20 · log₁₀(|Γ|)  [dB]</div>
+    <div class="formula"><div class="name">Mismatch Loss</div>ML = −10 · log₁₀(1 − |Γ|²)  [dB]</div>
+    <div class="formula"><div class="name">Power Delivered</div>P_del = (1 − |Γ|²) × P_inc</div>
+    <div class="formula"><div class="name">Inductive Reactance</div>XL = 2π · f · L</div>
+    <div class="formula"><div class="name">Capacitive Reactance</div>XC = 1 / (2π · f · C)</div>
+    <div class="formula"><div class="name">Resonant Frequency</div>f₀ = 1 / (2π · √(LC))</div>
+    <div class="formula"><div class="name">L-Network Q Factor</div>Q = √(R_high / R_low − 1)</div>
+    <div class="formula"><div class="name">Impedance</div>Z = R + jX  [Ω]</div>
+  </div>
+
+  <div class="section">
+    <h2>VSWR Reference</h2>
+    <table>
+      <tr><td>VSWR = 1.00</td><td class="good">Perfect match</td></tr>
+      <tr><td>VSWR &lt; 1.50</td><td class="good">Excellent</td></tr>
+      <tr><td>VSWR &lt; 2.00</td><td class="warn">Good (2:1)</td></tr>
+      <tr><td>VSWR &lt; 3.00</td><td class="warn">Marginal</td></tr>
+      <tr><td>VSWR ≥ 3.00</td><td class="bad">Poor</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Return Loss Reference</h2>
+    <table>
+      <tr><td>RL &gt; 20 dB</td><td class="good">Excellent (&lt;1% reflected)</td></tr>
+      <tr><td>RL 10–20 dB</td><td class="warn">Acceptable (1–10%)</td></tr>
+      <tr><td>RL &lt; 10 dB</td><td class="bad">Poor (&gt;10% reflected)</td></tr>
+    </table>
+  </div>
+</div>
+
+<div>
+  <div class="section">
+    <h2>Termination Conditions</h2>
+    <table>
+      <tr><td>Matched (ZL=Z₀)</td><td>Γ = 0, VSWR = 1</td></tr>
+      <tr><td>Open circuit</td><td>Γ = +1 ∠0°, VSWR = ∞</td></tr>
+      <tr><td>Short circuit</td><td>Γ = −1 ∠180°, VSWR = ∞</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>L-Network Matching</h2>
+    <table>
+      <tr><td>Series L + Shunt C</td><td>Low-pass response</td></tr>
+      <tr><td>Series C + Shunt L</td><td>High-pass response</td></tr>
+      <tr><td>Series element</td><td>Goes on high-R side</td></tr>
+      <tr><td>Shunt element</td><td>Goes on low-R side</td></tr>
+      <tr><td>Bandwidth</td><td>BW ≈ f₀ / Q</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Smith Chart Navigation</h2>
+    <div class="smith-note">
+      Centre = perfect match (Γ=0)<br>
+      Left edge = short circuit (Γ=−1)<br>
+      Right edge = open circuit (Γ=+1)<br>
+      Upper half = inductive (X &gt; 0)<br>
+      Lower half = capacitive (X &lt; 0)<br>
+      Series element → move along constant-R circle<br>
+      Shunt element → move along constant-G circle<br>
+      Clockwise = add series C or shunt L<br>
+      Counter-clockwise = add series L or shunt C
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>E12 Standard Values</h2>
+    <div style="font-size:11px;color:#444;line-height:2">
+      1.0 · 1.2 · 1.5 · 1.8 · 2.2 · 2.7 · 3.3 · 3.9 · 4.7 · 5.6 · 6.8 · 8.2<br>
+      <span style="color:#888">× 10ⁿ for any n (pF, nH, Ω…)</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="footer">RF Design Lab · All calculations pure JavaScript · Open in any browser</div>
+</body></html>`);
+  win.document.close();
+}
 let sweepPins=[];
 
 function initSweepPins(){
@@ -2079,6 +2465,9 @@ window.addEventListener('load',()=>{
   initPhasorDrag();
   initSmithDrag();
   initSweepPins();
+  initWaveInteraction();
+  // Glossary runs after a tick so all DOM is ready
+  setTimeout(initGlossary, 200);
 
   window.addEventListener('resize',()=>{
     calcImpedance();
