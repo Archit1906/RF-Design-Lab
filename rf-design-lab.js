@@ -1,3 +1,4 @@
+<<<<<<< HEAD:rf-design-lab (2).html
 <!DOCTYPE html>
 <html lang="en">
 
@@ -1636,6 +1637,9 @@
 
   <script>
     /* ============================================================
+=======
+/* ============================================================
+>>>>>>> origin/main:rf-design-lab.js
        GLOBALS & CHART REFS
     ============================================================ */
     let vswrChartInst = null, rlChartInst = null, gammaChartInst = null, matchChartInst = null;
@@ -1690,6 +1694,7 @@
       if (id === 'learn') setLearnLevel(0, document.querySelector('.learn-level-btn'));
       if (id === 'match') calcMatch();
       if (id === 'wave') { updateWaveInfo(); if (waveRunning) startWave(); }
+      if (id === 'power') calcPowerMetrics();
     }
 
     /* ============================================================
@@ -1742,11 +1747,8 @@
       document.getElementById('powerVal').className = 'metric-val ' + (power > 95 ? 'good' : power > 75 ? 'warn' : 'bad');
       document.getElementById('zlMagVal').textContent = zlMag.toFixed(2) + ' Ω';
 
-      // VSWR bar (log scaled)
-      const vbar = Math.min(100, (vswr - 1) / 9 * 100);
-      const vbarEl = document.getElementById('vswrBar');
-      vbarEl.style.width = vbar + '%';
-      vbarEl.style.background = vswr < 1.5 ? '#4ade80' : vswr < 2 ? '#fbbf24' : '#f87171';
+      // VSWR Gauge
+      if (typeof drawVswrGauge === 'function') drawVswrGauge(vswr);
 
       document.getElementById('powerBar').style.width = power.toFixed(1) + '%';
 
@@ -1756,11 +1758,160 @@
       else if (vswr < 2) { st.textContent = 'ACCEPTABLE'; st.className = 'status warn'; }
       else { st.textContent = 'MISMATCH'; st.className = 'status bad'; }
 
+      // (Power Metrics moved to standalone tab function)
+
+      // ==== L-NETWORK SOLVER (Prompt 3) ====
+      const solverTop = document.getElementById('solverTopology');
+      if (solverTop) {
+        const f_MHz = parseFloat(document.getElementById('diagFreq').value) || 2400;
+        const w = 2 * Math.PI * f_MHz * 1e6;
+        
+        function formatReactance(X_val) {
+            if (Math.abs(X_val) < 0.01) return { comp: "None", val: "0" };
+            if (X_val > 0) {
+                let L = X_val / w; // H
+                if (L < 1e-6) return { comp: "Inductor", val: (L * 1e9).toFixed(2) + " nH" };
+                return { comp: "Inductor", val: (L * 1e6).toFixed(2) + " μH" };
+            } else {
+                let C = 1 / (w * Math.abs(X_val)); // F
+                if (C < 1e-9) return { comp: "Capacitor", val: (C * 1e12).toFixed(2) + " pF" };
+                return { comp: "Capacitor", val: (C * 1e9).toFixed(2) + " nF" };
+            }
+        }
+
+        if (Math.abs(R - 50) < 0.1 && Math.abs(X) < 0.1) {
+          solverTop.textContent = "Already Matched";
+          document.getElementById('solverQ').textContent = "0";
+          document.getElementById('solverSeriesX').textContent = "0 Ω";
+          document.getElementById('solverSeriesComp').textContent = "Direct short";
+          document.getElementById('solverSeriesName').textContent = "Series Element";
+          document.getElementById('solverShuntX').textContent = "∞ Ω";
+          document.getElementById('solverShuntComp').textContent = "Open circuit";
+          document.getElementById('solverShuntName').textContent = "Shunt Element";
+          document.getElementById('solverSchematic').innerHTML = `<div style="text-align:center;color:var(--green)">Load is already 50Ω.<br>No network needed!</div>`;
+        } else {
+          let Q = 0, Xs_val = 0, Xp_val = 0, topoStr = "", ascii = "";
+          let G = R / (R*R + X*X);
+          let B_L = -X / (R*R + X*X);
+          let v1 = G/50 - G*G;
+          let v2 = 50*R - R*R;
+
+          if (R > 50 && v1 >= 0) {
+             topoStr = "Low-pass L (Shunt on Load)";
+             let B_p_total = Math.sqrt(v1);
+             let B_p = B_p_total - B_L;
+             Xp_val = B_p === 0 ? 999999 : -1 / B_p; 
+             let X_series_rem = -B_p_total / (G*G + B_p_total*B_p_total);
+             Xs_val = -X_series_rem; 
+             Q = B_p_total / G;
+             ascii = "Source    [Series]       Load\n (50Ω) ──+─[      ]─+── (R+jX)\n         |          |\n      [Shunt]       |\n         |          |\n        GND        GND";
+          } else if (v2 >= 0) {
+             topoStr = "Low-pass L (Series on Load)";
+             let X_total = Math.sqrt(v2); 
+             Xs_val = X_total - X;
+             Xp_val = - (50*R) / X_total;
+             Q = X_total / R;
+             ascii = "Source          [Series] Load\n (50Ω) ──+──────[      ]──+──\n         |                |\n      [Shunt]         (R+jX)\n         |                |\n        GND              GND";
+          } else {
+             topoStr = "Complex match fallback";
+          }
+
+          solverTop.textContent = topoStr;
+          document.getElementById('solverQ').textContent = Q.toFixed(2);
+          
+          let s_info = formatReactance(Xs_val);
+          document.getElementById('solverSeriesName').textContent = `Series ${s_info.comp}`;
+          document.getElementById('solverSeriesX').textContent = `${(Xs_val>0?'+':'')}${Xs_val.toFixed(2)} Ω`;
+          document.getElementById('solverSeriesComp').textContent = s_info.val;
+
+          let p_info = formatReactance(Xp_val);
+          document.getElementById('solverShuntName').textContent = `Shunt ${p_info.comp}`;
+          document.getElementById('solverShuntX').textContent = `${(Xp_val>0?'+':'')}${Xp_val.toFixed(2)} Ω`;
+          document.getElementById('solverShuntComp').textContent = p_info.val;
+
+          document.getElementById('solverSchematic').textContent = ascii;
+        }
+      }
+
       drawPhasor(R, X, Z0);
       aiDiagnose(R, X, Z0, gamma, vswr, rl);
       if (abRef) updateABDisplay();
 
       drawVswrGauge(vswr);
+    }
+
+    function syncPmInput() {
+      const s = document.getElementById('pmSlider'), n = document.getElementById('pmNum'), v = document.getElementById('pmInVal');
+      n.value = s.value; if (v) v.textContent = parseFloat(s.value).toFixed(2);
+    }
+    function syncPmSlider() {
+      const s = document.getElementById('pmSlider'), n = document.getElementById('pmNum'), v = document.getElementById('pmInVal');
+      const val = parseFloat(n.value) || 1;
+      s.value = Math.min(Math.max(val, parseFloat(s.min)), parseFloat(s.max));
+      if (v) v.textContent = parseFloat(val).toFixed(2);
+    }
+    function calcPowerMetrics() {
+      const vswr = parseFloat(document.getElementById('pmNum').value) || 1;
+      const rho = (Math.max(vswr, 1) - 1) / (Math.max(vswr, 1) + 1);
+      const refPow = rho * rho * 100;
+      const delPow = (1 - rho * rho) * 100;
+      const pmRhoEl = document.getElementById('pmRhoVal');
+      if (pmRhoEl) {
+        pmRhoEl.textContent = rho.toFixed(2);
+        document.getElementById('pmRefVal').textContent = refPow.toFixed(2) + '%';
+        document.getElementById('pmDelVal').textContent = delPow.toFixed(2) + '%';
+        document.getElementById('pmDelBar').style.width = delPow + '%';
+        document.getElementById('pmRefBar').style.width = refPow + '%';
+      }
+    }
+
+    function drawVswrGauge(vswrVal) {
+      const cv = document.getElementById('vswrGauge');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.clearRect(0, 0, W, H);
+      
+      const cx = W / 2, cy = H - 5;
+      const r = Math.min(W/2, H) - 10;
+      
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'butt';
+      
+      const pGreen = 0.5 / 9;
+      const pYellow = 2.0 / 9; 
+      
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, Math.PI, Math.PI + pGreen * Math.PI);
+      ctx.strokeStyle = '#4ade80';
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, Math.PI + pGreen * Math.PI, Math.PI + pYellow * Math.PI);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, Math.PI + pYellow * Math.PI, 2 * Math.PI);
+      ctx.strokeStyle = '#f87171';
+      ctx.stroke();
+
+      let mapped = Math.min(Math.max((vswrVal - 1) / 9, 0), 1);
+      const angle = Math.PI + (mapped * Math.PI);
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      const nx = cx + (r - 2) * Math.cos(angle);
+      const ny = cy + (r - 2) * Math.sin(angle);
+      ctx.lineTo(nx, ny);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#fafafa';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#fafafa';
+      ctx.fill();
     }
 
     function drawPhasor(R, X, Z0) {
@@ -1958,37 +2109,70 @@
     }
 
     function aiDiagnose(R, X, Z0, gamma, vswr, rl) {
-      const msgs = [];
-      const isInductive = X > 5;
-      const isCapacitive = X < -5;
-      const isTuned = Math.abs(X) < 5;
+      if (!document.getElementById('aiVswrBadge')) return;
 
-      let main = '';
-      if (vswr < 1.2) main = '<strong>System is well-matched.</strong> Γ=' + gamma.toFixed(3) + ', delivering ' + ((1 - gamma * gamma) * 100).toFixed(1) + '% of available power.';
-      else if (vswr < 2) {
-        main = '<strong>Marginal mismatch</strong> detected. ';
-        if (isInductive) main += 'Load is inductive (X=+' + X.toFixed(0) + 'Ω). ';
-        else if (isCapacitive) main += 'Load is capacitive (X=' + X.toFixed(0) + 'Ω). ';
-        main += 'VSWR ' + vswr.toFixed(2) + ' is acceptable for most applications.';
+      // Section 1: VSWR Health Indicator
+      const badge = document.getElementById('aiVswrBadge');
+      badge.className = ""; // reset animation class
+      if (vswr < 1.2) {
+        badge.textContent = "✅ Excellent Match";
+        badge.style.background = "var(--green)";
+        badge.style.color = "#000";
+      } else if (vswr < 1.5) {
+        badge.textContent = "🟢 Good Match";
+        badge.style.background = "#86efac"; // light green
+        badge.style.color = "#000";
+      } else if (vswr <= 2.0) {
+        badge.textContent = "🟡 Acceptable — Monitor";
+        badge.style.background = "var(--yellow)";
+        badge.style.color = "#000";
+      } else if (vswr <= 3.0) {
+        badge.textContent = "🔴 Poor Match — Action Needed";
+        badge.style.background = "var(--red)";
+        badge.style.color = "#fff";
       } else {
-        main = '<strong>Significant mismatch!</strong> VSWR=' + vswr.toFixed(2) + '. Only ' + ((1 - gamma * gamma) * 100).toFixed(1) + '% of power reaches the load.';
-      }
-      msgs.push(main);
-
-      if (isInductive && vswr > 1.5) {
-        const Xc_needed = -X;
-        msgs.push('<strong>Fix:</strong> Add series capacitor to cancel reactance. At 2.4 GHz: C = 1/(2π × 2.4×10⁹ × ' + Math.abs(Xc_needed).toFixed(0) + ') ≈ ' + (1e12 / (2 * Math.PI * 2.4e9 * Math.abs(Xc_needed))).toFixed(1) + ' pF');
-      }
-      if (isCapacitive && vswr > 1.5) {
-        const Xl_needed = -X;
-        msgs.push('<strong>Fix:</strong> Add series inductor to cancel reactance. At 2.4 GHz: L = ' + Math.abs(Xl_needed).toFixed(0) + '/(2π × 2.4×10⁹) ≈ ' + (Math.abs(Xl_needed) / (2 * Math.PI * 2.4e9) * 1e9).toFixed(2) + ' nH');
-      }
-      if (R !== Z0 && isTuned) {
-        msgs.push('<strong>Resistive mismatch:</strong> RL=' + R + 'Ω vs Z₀=' + Z0 + 'Ω. Use an L-network. Go to the Matching tab →');
+        badge.textContent = "❌ Critical Mismatch";
+        badge.className = "vswr-crit";
+        badge.style.background = "#dc2626";
+        badge.style.color = "#fff";
       }
 
-      const container = document.getElementById('aiMessages');
-      container.innerHTML = msgs.map(m => '<div class="ai-msg"><div class="ai-label">RF Assistant</div>' + m + '</div>').join('');
+      // Section 2: Impedance Character Analysis
+      const isInductive = X > +0.1;
+      const isCapacitive = X < -0.1;
+      const isPure = Math.abs(X) <= 0.1;
+      
+      document.getElementById('aiImpType').textContent = isPure ? "Purely Resistive" : (isInductive ? "Inductive" : "Capacitive");
+      document.getElementById('aiImpMag').textContent = Math.sqrt(R*R + X*X).toFixed(2) + " Ω";
+      
+      let phase = Math.atan2(X, R) * (180 / Math.PI);
+      document.getElementById('aiImpPhase').textContent = phase.toFixed(2) + "°";
+      
+      if (isPure) {
+        document.getElementById('aiImpDom').textContent = "Pure Resistance";
+        document.getElementById('aiImpDom').style.color = "var(--t1)";
+      } else if (Math.abs(X) > R) {
+        document.getElementById('aiImpDom').textContent = "Reactance-dominant — harder to match";
+        document.getElementById('aiImpDom').style.color = "var(--orange)";
+      } else {
+        document.getElementById('aiImpDom').textContent = "Resistance-dominant — good matching candidate";
+        document.getElementById('aiImpDom').style.color = "var(--green)";
+      }
+
+      // Section 3: AI Suggestions Engine
+      let tip = "";
+      if (vswr > 2.0) {
+        if (isInductive) tip = "Add a series capacitor to cancel inductive reactance, then re-tune.";
+        else if (isCapacitive) tip = "Add a series inductor to neutralise capacitive reactance.";
+        else tip = "Use a quarter-wave transformer or L-network to shift resistance to 50 Ω.";
+      } else if (vswr >= 1.5) {
+        tip = "Marginal match — consider a stub tuner or trim component values.";
+      } else if (vswr >= 1.2) {
+        tip = "System is within acceptable bounds. No immediate action required.";
+      } else {
+        tip = "Near-perfect match. Verify with VNA sweep across operating bandwidth.";
+      }
+      document.getElementById('aiSuggestionText').textContent = tip;
     }
 
     /* ============================================================
@@ -3528,6 +3712,7 @@ td:last-child{font-weight:600}
       requestAnimationFrame(draw);
     }
 
+<<<<<<< HEAD:rf-design-lab (2).html
     function drawVswrGauge(vswr) {
       const cv = document.getElementById('vswrGauge');
       if (!cv) return;
@@ -3638,6 +3823,142 @@ td:last-child{font-weight:600}
       ctx.font = '10px IBM Plex Mono';
       ctx.fillText('VSWR', cx, cy - R * 0.13);
     }
+=======
+    function toggleTheme() {
+      const isLight = document.documentElement.classList.toggle('light');
+      localStorage.setItem('rf-theme', isLight ? 'light' : 'dark');
+      const icon = document.getElementById('themeIcon');
+      if (isLight) {
+        icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+      } else {
+        icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+      }
+    }
+
+    if (localStorage.getItem('rf-theme') === 'light') {
+      document.documentElement.classList.add('light');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (document.documentElement.classList.contains('light')) {
+        document.getElementById('themeIcon').innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+      }
+
+      // Add Tooltips to Tabs
+      const tabTips = {
+        'IMPEDANCE': 'Analyze load impedance and calculate reflection coefficients.',
+        'SWEEP': 'Sweep frequency and visualize VSWR over a selected band.',
+        'WAVE SIM': 'Simulate standing waves on a transmission line.',
+        'MATCHING': 'Design L-networks to perfectly match load to source.',
+        'SMITH CHART': 'Visualize complex impedances on an interactive Smith Chart.',
+        'LEARN': 'Educational reference material on RF and Microwave concepts.'
+      };
+      document.querySelectorAll('.tab').forEach(tab => {
+        let text = tab.textContent;
+        const numSpan = tab.querySelector('.tab-num');
+        if (numSpan) text = text.replace(numSpan.textContent, '');
+        text = text.trim();
+        if (tabTips[text]) {
+          const icon = document.createElement('span');
+          icon.className = 'info-icon';
+          icon.textContent = 'i';
+          icon.setAttribute('data-tip', tabTips[text]);
+          icon.onclick = (e) => e.stopPropagation();
+          tab.appendChild(icon);
+        }
+      });
+
+      // Add Tooltips to Card Titles
+      const cardTips = {
+        'Load Parameters': 'Adjust resistance (R) and reactance (X) of your load.',
+        'Antenna Presets': 'Quickly load common antenna types or stubs.',
+        'Results': 'Key metrics derived from your load impedance at reference Z₀.',
+        'Impedance Phasor': 'Visual representation of resistive vs reactive components.',
+        'AI Analysis Dashboard': 'Real-time intelligent diagnostic of matching conditions and automated corrective suggestions.',
+        'Component Model': 'Simulate different matching networks (RC, RL, LC, RLC).',
+        'Sweep Summary': 'Snapshot of resonant frequency, bandwidth, and lowest VSWR.',
+        'VSWR vs Frequency': 'Graph comparing VSWR across your sweep range.',
+        'Return Loss vs Frequency': 'Graph detailing how much signal is reflected back (dB).',
+        '|Γ| vs Frequency': 'Magnitude of the reflection coefficient across the bandwidth.',
+        'Wave Parameters': 'Control the source frequency, phase, and the type of termination.',
+        'Wave Info': 'Real-time calculation of standing wave ratio and power percentages.',
+        'Visualization': 'Animation of the forward, reflected, and standing waves.',
+        'Matching Parameters': 'Input values for your load to calculate an optimal LC L-Network.',
+        'Computed Components': 'The exact Inductor (L) and Capacitor (C) values required.',
+        'Tolerance Impact': 'See how component variation (e.g. ±5%) impacts matching.',
+        'Circuit Diagram': 'Schematic of the calculated L-network based on your inputs.',
+        'Before vs After': 'Performance comparison of VSWR with and without matching.',
+        'Matching Path': 'Traces how the L-Network pulls impedance to the Smith Chart center.',
+        'AI Analysis': 'Breakdown of your matching network Q-factor and bandwidth.',
+        'Smith Chart Controls': 'Manually plot normalized Resistance and Reactance points.',
+        'Point Readout': 'Readout of metrics at your specific point plotted on the chart.',
+        'Smith Chart': 'Interactive visualization tracking impedance on the circular chart.',
+        'Learning Mode': 'Adjust the technical depth level of the interactive guide.',
+        'Quick Reference': 'Cheat sheet containing fundamental RF equations and matching charts.',
+        'All Formulas': 'Complete list of math utilized to calculate these metrics.',
+        'Power Metrics': 'Visually splits reflected and delivered power percentages.',
+        'L-Network Impedance Matching Solver': 'Calculates exact inductor and capacitor values.'
+      };
+      document.querySelectorAll('.card-title').forEach(title => {
+        const text = title.textContent.trim();
+        let matchedTip = 'Details about this section and its configurable parameters.';
+        for (let key in cardTips) {
+            if (text.includes(key)) matchedTip = cardTips[key];
+        }
+        const icon = document.createElement('span');
+        icon.className = 'info-icon';
+        icon.textContent = 'i';
+        icon.setAttribute('data-tip', matchedTip);
+        title.appendChild(icon);
+      });
+
+      // Chatbot Logic
+      const chatToggle = document.getElementById('chatbot-toggle');
+      const chatWindow = document.getElementById('chatbot-window');
+      const chatClose = document.getElementById('chatbot-close');
+      const chatInput = document.getElementById('chatbot-input');
+      const chatSend = document.getElementById('chatbot-send');
+      const chatMsgs = document.getElementById('chatbot-messages');
+
+      chatToggle.addEventListener('click', () => {
+        chatWindow.classList.toggle('open');
+      });
+      chatClose.addEventListener('click', () => {
+        chatWindow.classList.remove('open');
+      });
+
+      function addChatMsg(text, type) {
+        const msg = document.createElement('div');
+        msg.className = 'chat-msg ' + type;
+        msg.textContent = text;
+        chatMsgs.appendChild(msg);
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      }
+
+      function handleSend() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        addChatMsg(text, 'user');
+        chatInput.value = '';
+        
+        setTimeout(() => {
+          const responses = [
+            'Interesting! The Smith Chart is a great tool for that.',
+            'Have you tried checking the reflection coefficient?',
+            'Make sure your load impedance matches the source Z₀.',
+            'That could cause a high VSWR. Consider an L-network.'
+          ];
+          const reply = responses[Math.floor(Math.random() * responses.length)];
+          addChatMsg(reply, 'ai');
+        }, 600);
+      }
+
+      chatSend.addEventListener('click', handleSend);
+      chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSend();
+      });
+    });
+>>>>>>> origin/main:rf-design-lab.js
 
     window.addEventListener('load', () => {
       initScopeBg();
@@ -3647,6 +3968,7 @@ td:last-child{font-weight:600}
       updateSmith();
       runSweep();
       calcMatch();
+      calcPowerMetrics();
 
       initPhasorDrag();
       initSmithDrag();
@@ -3663,6 +3985,7 @@ td:last-child{font-weight:600}
         setTimeout(() => { drawMarkerOverlays(); drawAllPins(); }, 80);
       });
     });
+<<<<<<< HEAD:rf-design-lab (2).html
 
     /* ============================================================
        GEMINI AI CHATBOT LOGIC
@@ -3832,5 +4155,6 @@ td:last-child{font-weight:600}
   </div>
 
 </body>
+=======
+>>>>>>> origin/main:rf-design-lab.js
 
-</html>
