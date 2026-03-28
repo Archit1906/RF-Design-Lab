@@ -252,7 +252,7 @@
       font-weight: 700;
       letter-spacing: .15em;
       text-transform: uppercase;
-      color: var(--t3);
+      color: var(--t1);
       margin-bottom: 19px;
       display: flex;
       align-items: center;
@@ -276,7 +276,7 @@
       font-size: 10px;
       letter-spacing: .1em;
       text-transform: uppercase;
-      color: var(--t3);
+      color: var(--t2);
       margin-bottom: 6px;
       display: flex;
       justify-content: space-between;
@@ -403,7 +403,7 @@
       font-size: 10px;
       letter-spacing: .08em;
       text-transform: uppercase;
-      color: var(--t3)
+      color: var(--t2)
     }
 
     .metric-val {
