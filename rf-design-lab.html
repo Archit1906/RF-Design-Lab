@@ -22,13 +22,13 @@
         <div class="logo-dot"></div>RF LAB
       </div>
       <div class="tabs">
-        <button class="tab active" onclick="showPanel('impedance')"><span class="tab-num">01</span>IMPEDANCE</button>
-        <button class="tab" onclick="showPanel('sweep')"><span class="tab-num">02</span>SWEEP</button>
-        <button class="tab" onclick="showPanel('wave')"><span class="tab-num">03</span>WAVE SIM</button>
-        <button class="tab" onclick="showPanel('match')"><span class="tab-num">04</span>MATCHING</button>
-        <button class="tab" onclick="showPanel('smith')"><span class="tab-num">05</span>SMITH CHART</button>
-        <button class="tab" onclick="showPanel('learn')"><span class="tab-num">06</span>LEARN</button>
-        <button class="tab" onclick="showPanel('power')"><span class="tab-num">07</span>POWER METRICS</button>
+        <button class="tab active" onclick="showPanel('impedance')"><span class="tab-num">01</span>LOAD SETUP</button>
+        <button class="tab" onclick="showPanel('sweep')"><span class="tab-num">02</span>FREQUENCY ANALYSIS</button>
+        <button class="tab" onclick="showPanel('wave')"><span class="tab-num">03</span>WAVE VISUALIZATION</button>
+        <button class="tab" onclick="showPanel('smith')"><span class="tab-num">04</span>SMITH CHART</button>
+        <button class="tab" onclick="showPanel('match')"><span class="tab-num">05</span>IMPEDANCE MATCHING</button>
+        <button class="tab" onclick="showPanel('power')"><span class="tab-num">06</span>VSWR METER</button>
+        <button class="tab" onclick="showPanel('learn')"><span class="tab-num">07</span>LEARN</button>
       </div>
       <button class="theme-toggle" id="themeToggleBtn" aria-label="Toggle Theme" onclick="toggleTheme()">
         <svg id="themeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -227,11 +227,9 @@ No match needed
               }
               .vswr-crit { animation: pulseRedAlert 1.5s infinite; }
             </style>
-            <div class="card-title" style="display:flex; flex-direction:column; align-items:flex-start; gap:8px;">
-              <div style="display:flex; width:100%; align-items:center;">
-                🧠 AI Analysis Dashboard
-                <span style="font-size:9px; font-weight:bold; padding:2px 6px; border:1px solid var(--acc); color:var(--acc); border-radius:12px; margin-left:auto; vertical-align:middle;">🔬 Live Diagnostic — updates as you type</span>
-              </div>
+            <div style="display:flex; width:100%; align-items:center; margin-bottom:16px;">
+              <div class="card-title" style="margin-bottom:0; flex:1">🧠 AI Analysis Dashboard</div>
+              <span style="font-size:9px; font-weight:bold; padding:2px 6px; border:1px solid var(--acc); color:var(--acc); border-radius:12px; margin-left:8px; display:inline-block; white-space:nowrap;">🔬 Live Diagnostic</span>
             </div>
 
             <!-- Section 1: VSWR Health -->
@@ -280,7 +278,7 @@ No match needed
                 <div style="margin-bottom:8px; color:var(--acc); font-weight:bold; font-size:12px;">
                   👉 This is where your AI part comes in — interpretation, not just calculation
                 </div>
-                <div id="aiSuggestionText">Adjust parameters to begin diagnostic.</div>
+                <div id="aiSuggestionText" style="color:var(--yellow); font-weight:bold; font-size:14px; text-shadow:0 0 10px rgba(251, 191, 36, 0.2); letter-spacing:0.03em;">Adjust parameters to begin diagnostic.</div>
                 <div style="margin-top:12px; font-size:11px; color:var(--t3);">
                   💡 Tip: Re-run the Impedance Matching Solver above to generate corrective component values.
                 </div>
@@ -559,7 +557,7 @@ No match needed
               </div>
               <div class="field">
                 <div class="field-label">Frequency (MHz)</div>
-                <input type="number" id="mFreq" value="2400" min="1" oninput="calcMatch()">
+                <input type="number" id="mFreq" value="433" min="1" oninput="calcMatch()">
               </div>
               <div class="field">
                 <div class="field-label">Network Type</div>
@@ -586,6 +584,13 @@ No match needed
               <div class="card-title">Computed Components</div>
               <div id="matchComponents">
                 <div style="color:var(--t3);font-size:11px">Enter parameters above...</div>
+              </div>
+            </div>
+
+            <div class="card" style="border: 1px solid var(--acc); background: rgba(34, 211, 238, 0.05);">
+              <div class="card-title" style="color: var(--acc);">👉 Engineering Tool Recommendation</div>
+              <div id="matchAIRecommendation" style="font-size:11px;color:var(--t2);line-height:1.6">
+                Evaluating...
               </div>
             </div>
 
@@ -826,50 +831,161 @@ No match needed
      PANEL 7 — POWER METRICS
 ═══════════════════════════════════════════════════════ -->
       <div class="panel" id="panel-power">
-        <div class="panel-grid panel-grid-2" style="align-items:start">
+        <style>
+          .pm-dash { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom:16px; align-items: stretch; }
+          .pm-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; }
+          .pm-title { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--t3); letter-spacing: 0.1em; margin-bottom: 16px; }
+          .pm-title::before { content: '[ '; color: var(--acc); }
+          .pm-title::after { content: ' ]'; color: var(--acc); }
           
-          <!-- INPUT CARD -->
-          <div class="card">
-            <div class="card-title">VSWR Input</div>
-            <div class="field">
-              <div class="field-label">Voltage Standing Wave Ratio <span id="pmInVal">1.50</span></div>
-              <input type="range" id="pmSlider" min="1" max="20" step="0.01" value="1.50" oninput="syncPmInput(); calcPowerMetrics()">
-              <input type="number" id="pmNum" value="1.50" min="1" max="999" step="0.01" oninput="syncPmSlider(); calcPowerMetrics()" style="margin-top:6px">
+          .pm-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 11px; }
+          .pm-val { font-family: 'IBM Plex Mono', monospace; color: var(--t1); font-weight: 500; font-size: 12px; }
+          
+          .pm-btn-group { display: flex; gap: 4px; margin-top: -6px; margin-bottom: 16px; }
+          .pm-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--t2); padding: 4px 8px; font-size: 10px; border-radius: 4px; cursor: pointer; flex: 1; text-align: center; transition: all 0.2s; }
+          .pm-btn:hover { background: var(--bg1); }
+          .pm-btn.active { background: rgba(0,212,255,0.1); border-color: var(--acc); color: var(--acc); }
+          
+          .pm-slider { width: 100%; margin-bottom: 8px; accent-color: var(--acc); }
+          
+          .pm-table-row { display: flex; justify-content: space-between; align-items: center; font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-bottom: 11px; }
+          .pm-table-label { color: var(--t2); font-family: 'Syne', sans-serif; font-size: 12px; }
+          .pm-table-unit { color: var(--t3); font-size: 10px; width: 25px; text-align: right; }
+          
+          .pm-footer-box { background: rgba(74,222,128,0.1); border: 1px solid #4ade80; border-radius: 4px; padding: 10px; font-size: 10px; color: #a1a1aa; line-height: 1.5; margin-top: auto; border-left: 3px solid #4ade80; }
+          
+          @media (max-width: 1024px) {
+            .pm-dash { grid-template-columns: 1fr; }
+          }
+        </style>
+
+        <div class="pm-dash">
+          
+          <!-- QUADRANT 1: METER -->
+          <div class="pm-card" style="align-items: center; justify-content: center; min-height: 260px;">
+            <div class="pm-title" style="align-self: flex-start;">METER</div>
+            <!-- The canvas will be drawn by drawPmMeter() -->
+            <canvas id="pmMeterCanvas" width="360" height="220" style="width: 100%; max-width: 360px;"></canvas>
+          </div>
+
+          <!-- QUADRANT 2: WAVEFORM -->
+          <div class="pm-card" style="align-items: center; justify-content: center; min-height: 260px;">
+            <div class="pm-title" style="align-self: flex-start;">WAVEFORM</div>
+            <div style="display:flex; gap: 12px; font-size: 9px; color: var(--t3); font-family: 'IBM Plex Mono', monospace; margin-bottom: 12px; align-self: flex-start;">
+              <span style="display:flex; align-items:center; gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#4ade80"></div>Incident</span>
+              <span style="display:flex; align-items:center; gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#f87171"></div>Reflected</span>
+              <span style="display:flex; align-items:center; gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#fafafa;box-shadow:0 0 4px #fafafa"></div>Standing Wave</span>
             </div>
-            <div style="margin-top:16px; font-size:11px; color:var(--t3); line-height:1.5;">
-              Adjust the VSWR directly to simulate different mismatch scenarios without needing complex impedance matching values. Real-time metrics will update automatically.
+            <canvas id="pmWaveCanvas" width="360" height="150" style="width: 100%; max-width: 360px; flex: 1;"></canvas>
+            <div style="display:flex; gap:24px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--t2); margin-top: auto;">
+              <div id="pmGammaLabel">|Γ| ≈ 0.00</div>
+              <div id="pmPhaseLabel">φ ∠ 0°</div>
             </div>
           </div>
 
-          <!-- METRICS CARD -->
-          <div class="card" id="powerMetricsCard">
-            <div class="card-title">Power Metrics <span style="font-size:9px; font-weight:bold; padding:2px 6px; background:#fbbf24; color:#000; border-radius:12px; margin-left:8px; vertical-align:middle;">⚡ ADVANCED BUT IMPRESSIVE</span></div>
-            <div class="metrics">
-              <div class="metric">
-                <div>
-                  <div class="metric-name">Reflection Coefficient (ρ)</div>
-                  <div class="metric-val" id="pmRhoVal">0.00</div>
-                </div>
-              </div>
-              <div class="metric">
-                <div>
-                  <div class="metric-name" style="color:var(--red)">Reflected Power %</div>
-                  <div class="metric-val" id="pmRefVal" style="color:var(--red)">0.00%</div>
-                </div>
-              </div>
-              <div class="metric">
-                <div>
-                  <div class="metric-name" style="color:var(--green)">Delivered Power %</div>
-                  <div class="metric-val" id="pmDelVal" style="color:var(--green)">100.00%</div>
-                </div>
-              </div>
+          <!-- QUADRANT 3: CONTROLS -->
+          <div class="pm-card" style="min-height: 300px;">
+            <div class="pm-title">CONTROLS</div>
+            
+            <div class="pm-row">
+              <span style="color:var(--t2);">Source Power</span>
+              <span class="pm-val" id="pmSrcPowDisplay">100 W / 50.0 dBm</span>
             </div>
-            <div style="margin-top:12px; width:100%; height:8px; background:var(--bg3); border-radius:4px; display:flex; overflow:hidden;">
-              <div id="pmDelBar" style="height:100%; background:var(--green); width:100%; transition:width 0.2s;"></div>
-              <div id="pmRefBar" style="height:100%; background:var(--red); width:0%; transition:width 0.2s;"></div>
+            <input type="range" id="pmSrcPowSlider" class="pm-slider" min="1" max="1000" value="100" oninput="syncPmControls()">
+            
+            <div style="height: 1px; background: var(--border); margin: 16px 0;"></div>
+            
+            <div class="pm-row">
+              <span style="color:var(--t2);">Load Impedance (Z<sub>L</sub>)</span>
+              <span class="pm-val" id="pmZlDisplay">50 Ω</span>
             </div>
-            <div style="margin-top:12px; font-size:11px; color:var(--t3); font-style:italic;">
-              👉 Very useful for RF system explanation and antenna efficiency analysis
+            <input type="range" id="pmZlSlider" class="pm-slider" min="1" max="1000" value="50" oninput="syncPmControls()">
+            <div class="pm-btn-group">
+              <div class="pm-btn active" id="pmBtnRes" onclick="setPmZlMode('resistive')">Resistive</div>
+              <div class="pm-btn" id="pmBtnCap" onclick="setPmZlMode('capacitive')">Capacitive</div>
+              <div class="pm-btn" id="pmBtnInd" onclick="setPmZlMode('inductive')">Inductive</div>
+              <div class="pm-btn" id="pmBtnOpen" onclick="setPmZlMode('open')">Open</div>
+              <div class="pm-btn" id="pmBtnShort" onclick="setPmZlMode('short')">Short</div>
+            </div>
+            
+            <div class="pm-row">
+              <span style="color:var(--t2);">Line Impedance (Z<sub>0</sub>)</span>
+              <span class="pm-val" id="pmZ0Display">50 Ω</span>
+            </div>
+            <input type="range" id="pmZ0Slider" class="pm-slider" min="10" max="300" value="50" oninput="syncPmControls()">
+            <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--t3); margin-top: -6px; margin-bottom: 24px;">
+              <span>10</span><span>50</span><span>75</span><span>300</span>
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-top: auto;">
+              <div class="pm-btn" style="padding: 10px; font-weight: 600;" onclick="resetPmControls()">[ RESET ]</div>
+              <div class="pm-btn" style="padding: 10px; font-weight: 600;" id="pmFreezeBtn" onclick="togglePmFreeze()">[ FREEZE ]</div>
+            </div>
+          </div>
+
+          <!-- QUADRANT 4: TELEMETRY -->
+          <div class="pm-card" style="min-height: 300px;">
+            <div class="pm-title">TELEMETRY</div>
+            
+            <div class="pm-table-row">
+              <span class="pm-table-label">Reflection Coeff</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">Γ</span>
+              <span id="pmT_gamma">0.000</span><span class="pm-table-unit"></span>
+            </div>
+            <div class="pm-table-row">
+              <span class="pm-table-label">VSWR</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">ρ</span>
+              <span id="pmT_vswr">1.000</span><span class="pm-table-unit">: 1</span>
+            </div>
+            <div class="pm-table-row">
+              <span class="pm-table-label">Forward Power</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">P<sub>fwd</sub></span>
+              <span class="clickable-metric" onclick="togglePmPowerUnit()"><span id="pmT_pfwd">100.0</span><span class="pm-table-unit" id="pmT_pfwd_u"> W</span></span>
+            </div>
+            <div class="pm-table-row">
+              <span class="pm-table-label">Reflected Power</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">P<sub>ref</sub></span>
+              <span class="clickable-metric" onclick="togglePmPowerUnit()"><span id="pmT_pref">0.0</span><span class="pm-table-unit" id="pmT_pref_u"> W</span></span>
+            </div>
+            <div class="pm-table-row">
+              <span class="pm-table-label">Transmitted pwr</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">P<sub>trans</sub></span>
+              <span class="clickable-metric" onclick="togglePmPowerUnit()"><span id="pmT_ptrans">100.0</span><span class="pm-table-unit" id="pmT_ptrans_u"> W</span></span>
+            </div>
+            <div class="pm-table-row">
+              <span class="pm-table-label">Return Loss</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">RL</span>
+              <span id="pmT_rl">∞</span><span class="pm-table-unit">dB</span>
+            </div>
+            <div class="pm-table-row">
+              <span class="pm-table-label">Mismatch Loss</span>
+              <span style="margin-left:auto; color:var(--t3); margin-right:20px;">ML</span>
+              <span id="pmT_ml">0.00</span><span class="pm-table-unit">dB</span>
+            </div>
+
+            <!-- SVG Power Flow Concept -->
+            <div style="margin-top:20px; text-align:center;">
+              <svg id="pmPowerFlowSvg" viewBox="0 0 300 60" style="width:100%; max-width:280px;">
+                <defs>
+                  <marker id="arrowheadFwd" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+                    <polygon points="0 0, 6 2, 0 4" fill="#06b6d4" />
+                  </marker>
+                  <marker id="arrowheadRef" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+                    <polygon points="0 0, 6 2, 0 4" fill="#f43f5e" />
+                  </marker>
+                </defs>
+                <!-- FWD Base Line -->
+                <line x1="20" y1="20" x2="270" y2="20" stroke="#06b6d4" stroke-width="4" marker-end="url(#arrowheadFwd)" />
+                <text x="145" y="12" fill="#06b6d4" font-size="10" font-family="'IBM Plex Mono', monospace" text-anchor="middle">FORWARD ➔</text>
+                
+                <!-- REF Looping Return Line -->
+                <path id="pmPowerFlowRef" d="M 270 20 Q 280 20 280 35 Q 280 50 270 50 L 30 50" stroke="#f43f5e" stroke-width="0" fill="none" marker-end="url(#arrowheadRef)" />
+                <text x="145" y="44" fill="#f43f5e" font-size="10" font-family="'IBM Plex Mono', monospace" text-anchor="middle" id="pmPowerFlowRefText" opacity="0">⬅ REFLECTED</text>
+              </svg>
+            </div>
+            
+            <div class="pm-footer-box" id="pmT_status">
+              Perfect impedance match. 100% of power reaches the load. No reflected energy. Ideal for all RF systems.
             </div>
           </div>
 
@@ -884,26 +1000,125 @@ No match needed
 
   <script src="rf-design-lab.js"></script>
 
-  <!-- CHATBOT HTML -->
-  <div id="chatbot-container" class="chatbot-wrap">
-    <div id="chatbot-window" class="chatbot-window">
-      <div class="chatbot-header">
-        <div class="chatbot-title">RF Bot</div>
-        <button id="chatbot-close" class="chatbot-close-btn">&times;</button>
+  <!-- RF ASSISTANT PANEL -->
+  <div id="rf-assistant-root" class="rf-assistant" aria-label="RF Assistant Panel">
+    <!-- A. The Collapse Tab -->
+    <button id="rfa-tab" class="rfa-tab" aria-label="Toggle RF Assistant" data-tooltip="Show RF Assistant">
+      <div class="rfa-tab-content">
+        <!-- Antenna Glyph -->
+        <svg fill="currentColor" viewBox="0 0 24 24" class="rfa-antenna">
+          <path d="M12 18v6M12 14c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4zm0-6V2M6.3 7.7a8 8 0 0 0 0 11.3M17.7 7.7a8 8 0 0 1 0 11.3M3.5 4.9a12 12 0 0 0 0 16.9M20.5 4.9a12 12 0 0 1 0 16.9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <div class="rfa-separator"></div>
+        <div class="rfa-tab-text">A  S  S  T</div>
+        <!-- Chevron -->
+        <svg viewBox="0 0 24 24" class="rfa-chevron" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
       </div>
-      <div id="chatbot-messages" class="chatbot-messages">
-        <div class="chat-msg ai">Hello! I'm the RF Assistant. How can I help you today?</div>
+    </button>
+
+    <!-- B. The Panel Body (Transitions width 0 -> 60 -> 220 -> 360) -->
+    <div id="rfa-body" class="rfa-body state-expanded">
+      
+      <!-- Panel Header (52px) -->
+      <div class="rfa-header">
+        <div class="rfa-header-left">
+          <svg fill="currentColor" viewBox="0 0 24 24" class="rfa-antenna-icon">
+            <path d="M12 18v6M12 14c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4zm0-6V2M6.3 7.7a8 8 0 0 0 0 11.3M17.7 7.7a8 8 0 0 1 0 11.3M3.5 4.9a12 12 0 0 0 0 16.9M20.5 4.9a12 12 0 0 1 0 16.9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <div id="rfa-status-dot" class="rfa-status-dot connected"></div>
+          <div class="rfa-header-titles">
+            <div class="rfa-title">RF LAB ASSISTANT</div>
+            <div id="rfa-sublabel" class="rfa-sublabel connected">INITIALIZING...</div>
+          </div>
+        </div>
+        <div class="rfa-header-right">
+          <button class="rfa-ctrl-btn active" id="rfa-btn-expand" aria-label="Expand Panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+          <button class="rfa-ctrl-btn" id="rfa-btn-collapse" aria-label="Collapse to Header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="18" height="4" rx="1" ry="1"></rect></svg>
+          </button>
+          <button class="rfa-ctrl-btn" id="rfa-btn-beacon" aria-label="Beacon Mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          </button>
+          <button class="rfa-overflow-btn" id="rfa-btn-menu" aria-label="More Options">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+          </button>
+          
+          <!-- Dropdown Menu -->
+          <div id="rfa-dropdown" class="rfa-dropdown">
+            <button class="rfa-drop-item" id="rfa-opt-clear">Clear History</button>
+            <button class="rfa-drop-item" id="rfa-opt-copy">Copy Transcript</button>
+            <button class="rfa-drop-item" id="rfa-opt-alerts" style="display:flex; justify-content:space-between; align-items:center;">
+              Proactive Alerts
+              <span id="rfa-opt-alerts-toggle" style="color:var(--green)">ON</span>
+            </button>
+            <button class="rfa-drop-item" id="rfa-opt-about">About</button>
+          </div>
+        </div>
       </div>
-      <div class="chatbot-input-area">
-        <input type="text" id="chatbot-input" placeholder="Type a message..." />
-        <button id="chatbot-send">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+
+      <!-- Context Banner -->
+      <div class="rfa-context-banner">
+        <button id="rfa-context-toggle" class="rfa-context-toggle" aria-expanded="false">
+          <span class="rfa-context-label">▸ LIVE INSTRUMENT DATA</span>
+          <svg viewBox="0 0 24 24" class="rfa-context-chevron" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+        <div id="rfa-context-grid" class="rfa-context-grid">
+          <div class="rfa-grid-row">
+            <span>Γ</span><span id="rfa-val-gamma">0.000</span>
+            <span>VSWR</span><span id="rfa-val-vswr">1.000:1</span>
+          </div>
+          <div class="rfa-grid-row">
+            <span>P_fwd</span><span id="rfa-val-pfwd">100.0 W</span>
+            <span>P_ref</span><span id="rfa-val-pref">0.0 W</span>
+          </div>
+          <div class="rfa-grid-row">
+            <span>RL</span><span id="rfa-val-rl">∞ dB</span>
+            <span>ML</span><span id="rfa-val-ml">0.00 dB</span>
+          </div>
+          <div class="rfa-grid-row">
+            <span>Z_L</span><span id="rfa-val-zl">50 Ω</span>
+            <span>Z_0</span><span id="rfa-val-z0">50 Ω</span>
+          </div>
+        </div>
+        <div class="rfa-vswr-severity-bar">
+          <div id="rfa-vswr-fill" class="rfa-vswr-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- Message Thread -->
+      <div id="rfa-thread" class="rfa-thread">
+        <div id="rfa-empty-state" class="rfa-empty-state">
+          <svg fill="currentColor" viewBox="0 0 24 24" class="rfa-empty-icon">
+            <path d="M12 18v6M12 14c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4zm0-6V2M6.3 7.7a8 8 0 0 0 0 11.3M17.7 7.7a8 8 0 0 1 0 11.3M3.5 4.9a12 12 0 0 0 0 16.9M20.5 4.9a12 12 0 0 1 0 16.9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <div class="rfa-empty-text">READY FOR INPUT</div>
+          <div class="rfa-suggestions">
+            <button class="rfa-chip">Why is my VSWR high?</button>
+            <button class="rfa-chip">Explain return loss</button>
+            <button class="rfa-chip">What is a standing wave?</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Bar -->
+      <div class="rfa-input-bar">
+        <input type="text" id="rfa-input" class="rfa-input" placeholder="Ask about your current VSWR..." aria-label="Ask RF Assistant" autocomplete="off">
+        <button id="rfa-send" class="rfa-send" aria-label="Send Message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
         </button>
       </div>
+
     </div>
-    <button id="chatbot-toggle" class="chatbot-toggle-btn">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-    </button>
+    
+    <!-- Mobile Backdrop -->
+    <div class="rfa-backdrop-mobile" aria-hidden="true" onclick="window.rf_assistant.setState(0)"></div>
   </div>
 </body>
 
