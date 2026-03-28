@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSWR Educational Simulator | Precision RF Laboratory</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-base: #0d1117;
+            --panel-bg: #161c26;
+            --panel-alt: #1c2535;
+            --border-color: #2a3a52;
+            --fwd-color: #00d4ff;
+            --ref-color: #ff3a5c;
+            --vswr-color: #00ff9f;
+            --vswr-yellow: #f1c40f;
+            --vswr-orange: #e67e22;
+            --vswr-red: #ff3a5c;
+            
+            --font-ui: 'Rajdhani', sans-serif;
+            --font-data: 'Share Tech Mono', monospace;
+        }
+
+        /* Global Reset & Basic Setup */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: transparent;
+            color: #e6edf3;
+            font-family: var(--font-ui);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* CRT Scanline Overlay */
+        #scanline {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.05),
+                rgba(0, 0, 0, 0.05) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* Main Grid Wrapper */
+        .app-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            z-index: 10;
+        }
+
+        @media (max-width: 900px) {
+            .app-container { grid-template-columns: 1fr; }
+        }
+
+        /* Instrument Panel Styles */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 0 4px 10px rgba(0, 0, 0, 0.5);
+            position: relative;
+            padding: 25px 20px 20px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        /* Dark gradient over grid to make it subtle */
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at center, transparent 0%, var(--panel-bg) 80%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .panel-content {
+            position: relative;
+            z-index: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Instrument Badge (Top-Left) */
+        .badge {
+            position: absolute;
+            top: -1px; left: -1px;
+            background: var(--panel-alt);
+            border: 1px solid var(--border-color);
+            border-top: none; border-left: none;
+            border-bottom-right-radius: 6px;
+            padding: 4px 12px;
+            font-family: var(--font-data);
+            font-size: 0.8rem;
+            color: #8b9eb7;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-left: 3px solid var(--border-color);
+            z-index: 2;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .badge.zone-1 { border-left-color: var(--fwd-color); }
+        .badge.zone-2 { border-left-color: var(--vswr-color); }
+        .badge.zone-3 { border-left-color: #f1c40f; }
+        .badge.zone-4 { border-left-color: var(--ref-color); }
+
+        /* ZONE 1 - METER */
+        .meter-container {
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        #meter-vswr-badge {
+            position: absolute;
+            bottom: 30px;
+            font-family: var(--font-data);
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--vswr-color);
+            text-shadow: 0 0 10px rgba(0, 255, 159, 0.4);
+            background: #000;
+            padding: 2px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        @keyframes pulseRed {
+            0% { box-shadow: 0 0 15px rgba(255, 58, 92, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(255, 58, 92, 0.8); }
+            100% { box-shadow: 0 0 15px rgba(255, 58, 92, 0.2); }
+        }
+        .vswr-alarm {
+            color: var(--vswr-red) !important;
+            text-shadow: 0 0 10px rgba(255, 58, 92, 0.8) !important;
+            animation: pulseRed 1s infinite alternate;
+            border-color: var(--vswr-red) !important;
+        }
+
+        /* ZONE 2 - WAVEFORM */
+        .waveform-container {
+            align-items: center;
+            position: relative;
+        }
+        .legend {
+            position: absolute;
+            top: 25px; left: 15px;
+            font-family: var(--font-ui);
+            font-size: 0.85rem;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .legend-item { display: flex; align-items: center; margin-bottom: 2px; }
+        .legend-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+        .wave-readouts {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+            font-family: var(--font-data);
+            font-size: 1.1rem;
+        }
+        .wave-badge {
+            background: #000;
+            padding: 4px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: #8b9eb7;
+        }
+
+        /* ZONE 3 - CONTROLS */
+        .controls-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding-top: 15px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-family: var(--font-ui);
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #a0b6d4;
+        }
+        .control-val {
+            font-family: var(--font-data);
+            color: #fff;
+        }
+
+        /* Custom Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 3px;
+            outline: none;
+            position: relative;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(255,255,255,0.5);
+            border: 2px solid #000;
+        }
+        #power-slider::-webkit-slider-thumb { border-color: var(--fwd-color); }
+        #zl-slider::-webkit-slider-thumb { border-color: var(--ref-color); }
+        #z0-slider::-webkit-slider-thumb { border-color: var(--vswr-yellow); }
+
+        .preset-btns {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .btn-small {
+            background: #000;
+            border: 1px solid var(--border-color);
+            color: #8b9eb7;
+            padding: 3px 8px;
+            font-family: var(--font-data);
+            font-size: 0.8rem;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-small:hover { background: var(--border-color); color: #fff; }
+
+        /* Load Type Toggle */
+        .toggle-group {
+            display: flex;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .toggle-btn {
+            flex: 1;
+            background: #000;
+            color: #8b9eb7;
+            border: none;
+            border-right: 1px solid var(--border-color);
+            padding: 8px 0;
+            font-family: var(--font-ui);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .toggle-btn:last-child { border-right: none; }
+        .toggle-btn.active {
+            background: var(--border-color);
+            color: #fff;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .btn-action {
+            flex: 1;
+            padding: 10px;
+            background: #000;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            font-family: var(--font-ui);
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .btn-action:hover {
+            background: var(--border-color);
+            box-shadow: 0 0 10px rgba(255,255,255,0.1);
+        }
+
+        /* ZONE 4 - TELEMETRY & EDU CARD */
+        .telemetry-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-data);
+            margin-top: 15px;
+        }
+        .telemetry-table td {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(42, 58, 82, 0.5);
+        }
+        .telemetry-table tr:last-child td { border-bottom: none; }
+        .td-name { color: #a0b6d4; font-family: var(--font-ui); }
+        .td-sym { color: #8b9eb7; text-align: center; }
+        .td-val { color: #fff; text-align: right; font-weight: bold; width: 60px; }
+        .td-unit { color: #8b9eb7; text-align: left; padding-left: 8px !important; }
+
+        .edu-card {
+            margin-top: auto;
+            background: rgba(0, 255, 159, 0.05);
+            border: 1px solid rgba(0, 255, 159, 0.3);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: var(--font-ui);
+            font-size: 1rem;
+            line-height: 1.4;
+            color: #e6edf3;
+            transition: background 0.5s ease, border-color 0.5s ease;
+        }
+        .tick-anim {
+            animation: valTick 0.2s ease-out;
+        }
+        @keyframes valTick {
+            0% { transform: scale(1); color: #fff; }
+            50% { transform: scale(1.1); color: var(--fwd-color); }
+            100% { transform: scale(1); color: #fff; }
+        }
+        
+        /* =========================================================
+           RF ASSISTANT PANEL - UI/UX SPEC REBUILD
+        ========================================================= */
+        .app-container { transition: margin-right 0.32s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        #rfap-root {
+            position: fixed; top: 0; right: 0; height: 100vh; z-index: 9000;
+            display: flex; align-items: stretch; pointer-events: none;
+            font-family: var(--font-ui);
+            --rfap-bg: #111822; /* Darker slate */
+            --rfap-surface: #1a2533; /* Slate panel surface */
+            --rfap-border: #2a3d52;
+            --rfap-accent: #38bdf8; /* Cyan typical of UI */
+            --rfap-accent-hov: #7dd3fc;
+            --rfap-text: #e2e8f0;
+            --rfap-muted: #94a3b8;
+        }
+        #rfap-root * { pointer-events: auto; }
+
+        /* PERMANENT TAB */
+        .rfap-tab {
+            position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+            width: 28px; height: 120px; background: var(--rfap-surface);
+            border-left: 2px solid var(--rfap-accent);
+            border-radius: 6px 0 0 6px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 8px; box-shadow: -2px 0 10px rgba(0,0,0,0.3); transition: 0.14s ease; z-index: 9010;
+        }
+        .rfap-tab:hover { background: #1e2e3f; border-left-color: var(--rfap-accent-hov); box-shadow: -4px 0 15px rgba(56,189,248,0.2); }
+        .rfap-tab:active { transform: translateY(-50%) scaleX(0.94); }
+        .rfap-tab-icon { font-size: 14px; line-height:1; }
+        .rfap-tab-sep { width: 14px; height: 1px; background: var(--rfap-border); }
+        .rfap-tab-lbl { font-family: var(--font-data); font-size: 10px; color: var(--rfap-muted); letter-spacing: 0.2em; transform: rotate(90deg); margin: 24px 0; }
+        .rfap-tab-chev { color: var(--rfap-text); font-size: 14px; transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); line-height:1; }
+        .rfap-state-expanded .rfap-tab-chev { transform: rotate(180deg); }
+
+        /* PANEL BODY */
+        .rfap-panel {
+            background: var(--rfap-bg); border-left: 1px solid var(--rfap-border);
+            height: 100%; display: flex; flex-direction: column; overflow: hidden;
+            transition: width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute; right: 0; box-shadow: -5px 0 30px rgba(0,0,0,0.6);
+        }
+
+        .rfap-state-beacon { width: 60px; }
+        .rfap-state-header { width: 220px; }
+        .rfap-state-expanded { width: 360px; }
+
+        .rfap-beacon-view { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; position: relative; }
+        .rfap-state-beacon .rfap-beacon-view { display: flex; }
+        .rfap-state-beacon .rfap-full-view { display: none; }
+        .rfap-full-view { display: flex; flex-direction: column; height: 100%; min-width: 220px; width: 100%; }
+
+        /* HEADER */
+        .rfap-header {
+            height: 52px; min-height: 52px; background: var(--rfap-surface); border-bottom: 1px solid var(--rfap-border);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+        }
+        .rfap-title-area { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .rfap-bot-icon { font-size: 20px; line-height: 1; filter: drop-shadow(0 0 5px rgba(56,189,248,0.5)); }
+        .rfap-title-text { font-family: var(--font-ui); font-weight: 600; font-size: 13px; color: var(--rfap-text); letter-spacing: 0.05em; }
+        
+        .rfap-controls { display: flex; gap: 4px; }
+        .rfap-btn { width: 28px; height: 28px; background: transparent; border: 1px solid var(--rfap-border); border-radius: 4px; color: var(--rfap-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; font-size: 14px;}
+        .rfap-btn:hover { background: #2a3d52; color: #fff; }
+        .rfap-btn.active { border-color: var(--rfap-accent); color: var(--rfap-accent); }
+        .rfap-btn:active { transform: scale(0.92); }
+
+        /* OVERFLOW MENU */
+        .rfap-menu { position: absolute; top: 40px; right: 8px; background: #1c2535; border: 1px solid var(--rfap-border); border-radius: 6px; padding: 4px 0; display: none; flex-direction: column; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 100; min-width: 180px; opacity: 0; transform: translateY(-4px); transition: opacity 0.16s, transform 0.16s; }
+        .rfap-menu.active { display: flex; opacity: 1; transform: translateY(0); }
+        .rfap-menu button { background: none; border: none; text-align: left; padding: 8px 12px; color: var(--rfap-text); font-family: var(--font-data); font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; height: 36px;}
+        .rfap-menu button:hover { background: #2a3a52; color: var(--rfap-accent); }
+        .rfap-menu hr { border: none; border-top: 1px solid var(--rfap-border); margin: 4px 0; }
+
+        /* CONTEXT BANNER */
+        .rfap-banner-toggle { height: 32px; background: var(--rfap-surface); color: #6a8aad; font-size: 10px; font-family: var(--font-data); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; cursor: pointer; border-bottom: 1px solid var(--rfap-border); transition: 0.2s; user-select: none;}
+        .rfap-banner-toggle:hover { background: #1c2535; color: #fff; }
+        .rfap-banner-chev { font-size: 10px; transition: transform 0.2s ease; }
+        .rfap-banner-expanded .rfap-banner-chev { transform: rotate(90deg); }
+        
+        .rfap-banner { background: #0d1117; padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height 0.24s cubic-bezier(0.4, 0, 0.2, 1), padding 0.24s; border-bottom: 0 solid var(--rfap-border); position: relative; }
+        .rfap-banner-expanded .rfap-banner { max-height: 120px; padding: 12px 16px; border-bottom-width: 1px; }
+        .rfap-banner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-family: var(--font-data); }
+        .rfap-banner-lbl { color: #6a8aad; font-size: 10px; }
+        .rfap-banner-val { color: #00ff9f; font-size: 11px; font-weight: 500; transition: color 0.15s; }
+        .rfap-sever-bar { position: absolute; bottom: 0; left: 0; height: 1px; background: #ff3a5c; width: 0%; transition: width 0.3s ease; }
+
+        /* THREAD */
+        .rfap-thread { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+        .rfap-thread::-webkit-scrollbar { width: 4px; }
+        .rfap-thread::-webkit-scrollbar-track { background: var(--rfap-bg); }
+        .rfap-thread::-webkit-scrollbar-thumb { background: var(--rfap-border); border-radius: 2px; }
+        .rfap-thread::-webkit-scrollbar-thumb:hover { background: #3a4a62; }
+
+        .rfap-msg { font-family: var(--font-data); font-size: 14px; padding: 10px 14px; line-height: 1.6; color: #c9d8ef; position: relative; word-wrap: break-word; animation: rfapMsgIn 0.18s ease-out both; }
+        @keyframes rfapMsgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .rfap-msg p { margin-bottom: 8px; } .rfap-msg p:last-child { margin-bottom: 0; }
+        .rfap-msg strong { color: #fff; font-weight: 700; }
+        
+        .rfap-msg-user { align-self: flex-end; max-width: 78%; background: #1c2535; border: 1px solid var(--rfap-border); border-radius: 10px 10px 2px 10px; }
+        .rfap-msg-bot { align-self: flex-start; max-width: 85%; background: var(--rfap-surface); border-left: 2px solid var(--rfap-accent); border-radius: 0 10px 10px 10px; padding-left: 16px; }
+        
+        .rfap-system-msg { max-width: 100%; text-align: center; background: rgba(255,58,92,0.06); border: 1px solid rgba(255,58,92,0.25); border-radius: 6px; padding: 8px 14px; color: #ff3a5c; font-family: var(--font-data); font-size: 11px; }
+        
+        .rfap-time { position: absolute; bottom: -16px; right: 4px; font-size: 10px; color: #6a8aad; }
+        .rfap-msg-bot code { background: #0d1117; color: var(--rfap-accent-hov); padding: 2px 5px; border-radius: 3px; border: 1px solid var(--rfap-border); }
+        .rfap-formula { background: #0d1117; border-left: 3px solid #00ff9f; padding: 8px 12px; margin: 8px 0; color: #00ff9f; font-size: 12px; text-align: center; }
+
+        /* EMPTY STATE */
+        .rfap-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--rfap-border); gap: 12px; }
+        .rfap-empty-lbl { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.3em; }
+        .rfap-chip { background: transparent; border: 1px solid var(--rfap-border); color: #c9d8ef; border-radius: 50px; padding: 4px 12px; font-family: var(--font-data); font-size: 11px; cursor: pointer; transition: 0.2s; }
+        .rfap-chip:hover { border-color: var(--rfap-accent); color: #fff; background: rgba(56,189,248,0.1); }
+
+        /* TYPING INDICATOR */
+        .rfap-typing { display: flex; gap: 4px; padding: 4px; }
+        .rfap-dot { width: 6px; height: 6px; background: var(--rfap-accent); border-radius: 50%; animation: rfapType 1.2s infinite ease-in-out both; }
+        .rfap-dot:nth-child(1) { animation-delay: -0.32s; } .rfap-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes rfapType { 0%, 80%, 100% { transform: scale(0.4); } 40% { transform: scale(1); } }
+
+        /* INPUT AREA (Image Style) */
+        .rfap-input-zone { padding: 12px; background: var(--rfap-bg); border-top: 1px solid var(--rfap-border); display: flex; flex-direction: column; gap: 8px; z-index: 10; position: relative; }
+        .rfap-input { width: 100%; height: 38px; background: #0d1117; border: 1px solid var(--rfap-border); border-radius: 6px; color: #c9d8ef; font-family: var(--font-data); font-size: 13px; padding: 0 12px; outline: none; transition: border-color 0.18s ease; }
+        .rfap-input:focus { border-color: var(--rfap-accent); }
+        .rfap-input::placeholder { color: #5c6e88; transition: opacity 0.5s; }
+        .rfap-input.fade-ph::placeholder { opacity: 0; }
+        
+        .rfap-btn-send { width: 100%; height: 38px; background: var(--rfap-accent); border: none; border-radius: 6px; color: #000; font-family: var(--font-ui); font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: transform 0.12s ease, background 0.12s ease; }
+        .rfap-btn-send:hover { background: var(--rfap-accent-hov); transform: scale(1.02); }
+        .rfap-btn-send:active { transform: scale(0.98); }
+        .rfap-btn-send:disabled { background: #1e293b; color: #475569; cursor: not-allowed; transform: scale(1); }
+        .rfap-spinner { width: 16px; height: 16px; border: 2px solid #000; border-top-color: transparent; border-radius: 50%; animation: rfapSpin 0.7s linear infinite; }
+        @keyframes rfapSpin { to { transform: rotate(360deg); } }
+
+        /* SETTINGS OVERLAY */
+        .rfap-settings { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; background: var(--rfap-bg); z-index: 50; padding: 20px; display: none; flex-direction: column; gap: 12px; font-family: var(--font-ui); opacity: 0; transition: opacity 0.2s; }
+        .rfap-settings.active { display: flex; opacity: 1; }
+        .rfap-settings h3 { font-size: 16px; color: #fff; }
+        .rfap-settings p { font-size: 12px; color: var(--rfap-muted); }
+        .rfap-settings input { background: #0d1117; border: 1px solid var(--rfap-border); color: #fff; padding: 10px; border-radius: 6px; font-family: var(--font-data); outline: none; width: 100%; margin-top: 8px;}
+        .rfap-settings input:focus { border-color: var(--rfap-accent); }
+
+        @media (max-width: 768px) {
+            .rfap-mode-docked { display: none; }
+            .rfap-state-expanded { width: 100vw; }
+            .rfap-state-header { width: 100vw; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .rfap-panel, .app-container, .rfap-tab-chev, .rfap-banner, .rfap-msg { transition: none !important; animation: none !important; }
+            .rfap-dot { animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="scanline"></div>
+
+    <div class="app-container">
+        
+        <!-- ZONE 1: METER -->
+        <div class="panel">
+            <div class="badge zone-1">[ METER ]</div>
+            <div class="panel-content meter-container">
+                <canvas id="meterCanvas" width="420" height="260"></canvas>
+                <div id="meter-vswr-badge">VSWR 1.00</div>
+            </div>
+        </div>
+
+        <!-- ZONE 2: WAVEFORM -->
+        <div class="panel">
+            <div class="badge zone-2">[ WAVEFORM ]</div>
+            <div class="panel-content waveform-container">
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-dot" style="background: var(--fwd-color);"></div> Incident</div>
+                    <div class="legend-item"><div class="legend-dot" style="background: var(--ref-color);"></div> Reflected</div>
+                    <div class="legend-item"><div class="legend-dot" style="background: rgba(255,255,255,0.85);"></div> Standing Wave</div>
+                </div>
+                <!-- Top margin adjusted slightly to make room for badge below -->
+                <canvas id="waveCanvas" width="560" height="220" style="margin-top: 10px;"></canvas>
+                <div class="wave-readouts">
+                    <div class="wave-badge" id="lbl-gamma">|Γ| = 0.00</div>
+                    <div class="wave-badge" id="lbl-phase">ρ ∠ = 0°</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ZONE 3: CONTROLS -->
+        <div class="panel">
+            <div class="badge zone-3">[ CONTROLS ]</div>
+            <div class="panel-content controls-container">
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Source Power</span>
+                        <span class="control-val"><span id="val-pwr">100.0</span> <span style="font-size:0.8em;color:#8b9eb7">W</span> / <span id="val-dbm">50.0</span> <span style="font-size:0.8em;color:#8b9eb7">dBm</span></span>
+                    </div>
+                    <!-- Using min 0 max 3 to represent 1 to 1000 W log scale. 0 = 1W, 1 = 10W, 2 = 100W, 3 = 1000W -->
+                    <input type="range" id="power-slider" min="0" max="3" step="0.01" value="2">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Load Impedance (Z<sub>L</sub>)</span>
+                        <span class="control-val"><span id="val-zl">75</span> <span style="font-size:0.8em;color:#8b9eb7">Ω</span></span>
+                    </div>
+                    <div style="position:relative;">
+                        <input type="range" id="zl-slider" min="1" max="500" step="1" value="75">
+                        <div style="position:absolute; top:8px; left:9.8%; width:2px; height:8px; background:var(--vswr-yellow); pointer-events:none;"></div>
+                        <div style="position:absolute; top:16px; left:9.2%; font-family:var(--font-ui); font-size:10px; color:var(--vswr-yellow); pointer-events:none;">Z₀</div>
+                    </div>
+                    
+                    <div class="toggle-group" id="load-type-toggles">
+                        <button class="toggle-btn active" data-type="res">Resistive</button>
+                        <button class="toggle-btn" data-type="cap">Capacitive</button>
+                        <button class="toggle-btn" data-type="ind">Inductive</button>
+                        <button class="toggle-btn" data-type="open">Open</button>
+                        <button class="toggle-btn" data-type="short">Short</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header" style="margin-top:10px;">
+                        <span>Line Impedance (Z₀)</span>
+                        <span class="control-val"><span id="val-z0">50</span> <span style="font-size:0.8em;color:#8b9eb7">Ω</span></span>
+                    </div>
+                    <input type="range" id="z0-slider" min="10" max="300" step="1" value="50">
+                    <div class="preset-btns">
+                        <button class="btn-small p-z0" data-val="50">50Ω</button>
+                        <button class="btn-small p-z0" data-val="75">75Ω</button>
+                        <button class="btn-small p-z0" data-val="300">300Ω</button>
+                    </div>
+                </div>
+
+                <div class="action-btns">
+                    <button class="btn-action" id="btn-reset">[ RESET ]</button>
+                    <button class="btn-action" id="btn-freeze">[ FREEZE ]</button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ZONE 4: TELEMETRY -->
+        <div class="panel">
+            <div class="badge zone-4">[ TELEMETRY ]</div>
+            <div class="panel-content">
+                <table class="telemetry-table">
+                    <tr><td class="td-name">Reflection Coeff</td><td class="td-sym">Γ</td><td class="td-val" id="t-gamma">0.000</td><td class="td-unit">—</td></tr>
+                    <tr><td class="td-name">VSWR</td><td class="td-sym">ρ</td><td class="td-val" id="t-vswr">1.000</td><td class="td-unit">:1</td></tr>
+                    <tr><td class="td-name">Forward Power</td><td class="td-sym">P<sub>fwd</sub></td><td class="td-val" id="t-pfwd">100.0</td><td class="td-unit">W</td></tr>
+                    <tr><td class="td-name">Reflected Power</td><td class="td-sym">P<sub>ref</sub></td><td class="td-val" id="t-pref">0.0</td><td class="td-unit">W</td></tr>
+                    <tr><td class="td-name">Transmitted pwr</td><td class="td-sym">P<sub>trans</sub></td><td class="td-val" id="t-ptrans">100.0</td><td class="td-unit">W</td></tr>
+                    <tr><td class="td-name">Return Loss</td><td class="td-sym">RL</td><td class="td-val" id="t-rl">∞</td><td class="td-unit">dB</td></tr>
+                    <tr><td class="td-name">Mismatch Loss</td><td class="td-sym">ML</td><td class="td-val" id="t-ml">0.00</td><td class="td-unit">dB</td></tr>
+                </table>
+
+                <div class="edu-card" id="edu-card">
+                    Perfect impedance match. 100% of power reaches the load. No reflected energy. Ideal for all RF systems.
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Complex Math Helper
+        class Complex {
+            constructor(re, im = 0) { this.re = re; this.im = im; }
+            add(c) { return new Complex(this.re + c.re, this.im + c.im); }
+            sub(c) { return new Complex(this.re - c.re, this.im - c.im); }
+            mag() { return Math.sqrt(this.re * this.re + this.im * this.im); }
+            phase() { return Math.atan2(this.im, this.re); }
+            div(c) {
+                let den = c.re * c.re + c.im * c.im;
+                return new Complex((this.re * c.re + this.im * c.im) / den, (this.im * c.re - this.re * c.im) / den);
+            }
+        }
+
+        // Global State
+        const state = {
+            powerLog: 2, // Default 100W (10^2)
+            zL: 75,
+            z0: 50,
+            loadType: 'res', // res, cap, ind, open, short
+            isFrozen: false,
+            animTime: 0,
+            // Computed Physics
+            powerLevel: 100,
+            gammaMag: 0,
+            gammaPhase: 0,
+            vswr: 1.0,
+            pRef: 0,
+            pTrans: 100,
+            returnLoss: 0,
+            mismatchLoss: 0,
+            // Needle animation targets
+            pwrNeedleTarget: 0,
+            pwrNeedleCurrent: 0,
+            refNeedleTarget: 0,
+            refNeedleCurrent: 0,
+            meterSweepActive: true
+        };
+
+        // DOM Elements
+        const DOM = {
+            sldPwr: document.getElementById('power-slider'),
+            sldZl: document.getElementById('zl-slider'),
+            sldZ0: document.getElementById('z0-slider'),
+            vPwr: document.getElementById('val-pwr'),
+            vDbm: document.getElementById('val-dbm'),
+            vZl: document.getElementById('val-zl'),
+            vZ0: document.getElementById('val-z0'),
+            btnReset: document.getElementById('btn-reset'),
+            btnFreeze: document.getElementById('btn-freeze'),
+            toggles: document.querySelectorAll('.toggle-btn'),
+            pZ0: document.querySelectorAll('.p-z0'),
+            meterBadge: document.getElementById('meter-vswr-badge'),
+            eduCard: document.getElementById('edu-card'),
+            lblGamma: document.getElementById('lbl-gamma'),
+            lblPhase: document.getElementById('lbl-phase'),
+            // Telemetry grid elements
+            tGamma: document.getElementById('t-gamma'),
+            tVswr: document.getElementById('t-vswr'),
+            tPfwd: document.getElementById('t-pfwd'),
+            tPref: document.getElementById('t-pref'),
+            tPtrans: document.getElementById('t-ptrans'),
+            tRl: document.getElementById('t-rl'),
+            tMl: document.getElementById('t-ml')
+        };
+
+        const ctxMeter = document.getElementById('meterCanvas').getContext('2d');
+        const ctxWave = document.getElementById('waveCanvas').getContext('2d');
+
+        // Linear interpolation for color mixing or needle easing
+        const lerp = (a, b, t) => a + (b - a) * t;
+
+        // Number formatter
+        const fmt = (num, dec) => num === Infinity ? "∞" : num.toFixed(dec);
+
+        // Calculate Physics Engine
+        function calculatePhysics() {
+            // Power
+            state.powerLevel = Math.pow(10, state.powerLog);
+            let pwr = state.powerLevel;
+            let z0_c = new Complex(state.z0, 0);
+            let zL_c;
+
+            // Load Impedance Complex formulation
+            if (state.loadType === 'res') {
+                zL_c = new Complex(state.zL, 0);
+            } else if (state.loadType === 'cap') {
+                zL_c = new Complex(0, -state.zL);
+            } else if (state.loadType === 'ind') {
+                zL_c = new Complex(0, state.zL);
+            }
+
+            if (state.loadType === 'short') {
+                state.gammaMag = 1;
+                state.gammaPhase = Math.PI; // -1
+            } else if (state.loadType === 'open') {
+                state.gammaMag = 1;
+                state.gammaPhase = 0; // +1
+            } else {
+                let num = zL_c.sub(z0_c);
+                let den = zL_c.add(z0_c);
+                let gamma = num.div(den);
+                state.gammaMag = gamma.mag();
+                state.gammaPhase = gamma.phase();
+            }
+
+            // Guard rails
+            state.gammaMag = Math.min(state.gammaMag, 0.99999);
+            if (state.loadType === 'open' || state.loadType === 'short' || state.loadType === 'cap' || state.loadType === 'ind') {
+                state.gammaMag = 1; // force perfect 1 for display logic
+            }
+
+            // VSWR
+            if (state.gammaMag >= 0.999) {
+                state.vswr = Infinity;
+            } else {
+                state.vswr = (1 + state.gammaMag) / (1 - state.gammaMag);
+            }
+
+            // Power
+            state.pRef = pwr * (state.gammaMag * state.gammaMag);
+            state.pTrans = pwr - state.pRef;
+
+            // Losses
+            if (state.gammaMag < 0.001) {
+                state.returnLoss = Infinity;
+            } else {
+                state.returnLoss = -20 * Math.log10(state.gammaMag);
+            }
+            
+            if (state.gammaMag >= 0.999) {
+                state.mismatchLoss = Infinity; // Infinite mismatch loss doesn't mean sense normally, but signal is gone
+            } else {
+                state.mismatchLoss = -10 * Math.log10(1 - (state.gammaMag * state.gammaMag));
+            }
+
+            // Set needle target angles (-40deg to +40deg)
+            // Power max is 1000W. Let's map log scale to angle
+            let pwrLogMap = Math.log10(pwr) / 3; // 0 to 1
+            state.pwrNeedleTarget = -45 + (pwrLogMap * 90); // Maps 1 to 1000W across -45 to +45 deg
+
+            let refLog = state.pRef < 1 ? 0 : Math.log10(state.pRef) / 3; // 0 to 1
+            if (state.pRef >= 1000) refLog = 1;
+            state.refNeedleTarget = -45 + (refLog * 90);
+
+            updateUI();
+            
+            // --- Expose state and dispatch event for RF Assistant ---
+            window.vswr_state = state;
+            document.dispatchEvent(new CustomEvent('vswr_update'));
+        }
+
+        function triggerTick(el) {
+            el.classList.remove('tick-anim');
+            void el.offsetWidth; // trigger reflow
+            el.classList.add('tick-anim');
+        }
+
+        // Keep track of values to only trigger animation on change
+        let lastTelemetry = {};
+
+        function updateUI() {
+            // Update Labels
+            DOM.vPwr.innerText = state.powerLevel < 10 ? state.powerLevel.toFixed(1) : state.powerLevel.toFixed(0);
+            let dbm = 10 * Math.log10(state.powerLevel * 1000);
+            DOM.vDbm.innerText = dbm.toFixed(1);
+
+            let zL_disp = state.zL;
+            if (state.loadType === 'short') zL_disp = "0";
+            if (state.loadType === 'open') zL_disp = "∞";
+            // if cap/ind, maybe add "j"
+            if (state.loadType === 'cap') zL_disp = "-j" + state.zL;
+            if (state.loadType === 'ind') zL_disp = "+j" + state.zL;
+            DOM.vZl.innerText = zL_disp;
+
+            DOM.vZ0.innerText = state.z0;
+
+            // Slider track dynamic color fills
+            let pwrPct = (state.powerLog / 3) * 100;
+            DOM.sldPwr.style.background = `linear-gradient(to right, var(--fwd-color) ${pwrPct}%, var(--border-color) ${pwrPct}%)`;
+            
+            let zlPct = ((state.zL - 1) / 499) * 100;
+            DOM.sldZl.style.background = `linear-gradient(to right, var(--ref-color) ${zlPct}%, var(--border-color) ${zlPct}%)`;
+
+            let z0Pct = ((state.z0 - 10) / 290) * 100;
+            DOM.sldZ0.style.background = `linear-gradient(to right, var(--vswr-yellow) ${z0Pct}%, var(--border-color) ${z0Pct}%)`;
+
+            // Disable ZL slider if open or short
+            DOM.sldZl.disabled = (state.loadType === 'open' || state.loadType === 'short');
+            DOM.sldZl.style.opacity = DOM.sldZl.disabled ? 0.3 : 1;
+
+            // Telemetry Table updates + tick animation
+            const updateTxt = (el, val) => {
+                if (lastTelemetry[el.id] !== val) {
+                    el.innerText = val;
+                    triggerTick(el);
+                    lastTelemetry[el.id] = val;
+                }
+            };
+
+            updateTxt(DOM.tGamma, state.gammaMag >= 0.999 ? "1.000" : state.gammaMag.toFixed(3));
+            let strVswr = state.vswr === Infinity ? "∞" : state.vswr.toFixed(3);
+            updateTxt(DOM.tVswr, strVswr);
+            updateTxt(DOM.tPfwd, state.powerLevel.toFixed(1));
+            updateTxt(DOM.tPref, state.pRef.toFixed(1));
+            updateTxt(DOM.tPtrans, state.pTrans.toFixed(1));
+            updateTxt(DOM.tRl, state.returnLoss === Infinity ? "∞" : state.returnLoss.toFixed(2));
+            updateTxt(DOM.tMl, state.mismatchLoss === Infinity ? "∞" : state.mismatchLoss.toFixed(2));
+
+            // Small waveform badges
+            DOM.lblGamma.innerText = `|Γ| = ${state.gammaMag >= 0.999 ? "1.00" : state.gammaMag.toFixed(2)}`;
+            let phaseDeg = (state.gammaPhase * 180 / Math.PI).toFixed(0);
+            DOM.lblPhase.innerText = `ρ ∠ = ${phaseDeg}°`;
+
+            // Meter Badge & Education Card
+            let vswrDisplay = state.vswr === Infinity ? "∞" : state.vswr.toFixed(2);
+            DOM.meterBadge.innerText = `VSWR ${vswrDisplay}`;
+            
+            let eduText = "";
+            let eduColor = "";
+            let eduBorder = "";
+            let isAlarm = false;
+
+            if (state.vswr === Infinity) {
+                eduText = "⛔ Total reflection. All transmitted power is returned. The load is essentially an open or short circuit.";
+                eduColor = "rgba(255, 58, 92, 0.15)";
+                eduBorder = "rgba(255, 58, 92, 0.5)";
+                isAlarm = true;
+            } else if (state.vswr > 3.0) {
+                eduText = "⚠ Severe mismatch. Over 25% of power reflected back toward the transmitter. Risk of damage to PA finals at high power.";
+                eduColor = "rgba(255, 58, 92, 0.1)";
+                eduBorder = "rgba(255, 58, 92, 0.4)";
+                isAlarm = true;
+            } else if (state.vswr > 2.0) {
+                eduText = "Moderate mismatch. 11–25% reflected power. Transmitter protection circuitry may activate. Investigate feed system.";
+                eduColor = "rgba(230, 126, 34, 0.1)";
+                eduBorder = "rgba(230, 126, 34, 0.4)";
+            } else if (state.vswr > 1.5) {
+                eduText = "Good match. Up to 11% reflected power. Fine for receive-only systems, marginal for high-power transmitters.";
+                eduColor = "rgba(241, 196, 15, 0.1)";
+                eduBorder = "rgba(241, 196, 15, 0.4)";
+            } else if (state.vswr > 1.05) {
+                eduText = "Excellent match. Less than 4% of power reflected. Acceptable for virtually all professional applications.";
+                eduColor = "rgba(0, 255, 159, 0.05)";
+                eduBorder = "rgba(0, 255, 159, 0.3)";
+            } else {
+                eduText = "Perfect impedance match. 100% of power reaches the load. No reflected energy. Ideal for all RF systems.";
+                eduColor = "rgba(0, 255, 159, 0.1)";
+                eduBorder = "rgba(0, 255, 159, 0.5)";
+            }
+
+            if (DOM.eduCard.innerText !== eduText) {
+                DOM.eduCard.innerText = eduText;
+                DOM.eduCard.style.backgroundColor = eduColor;
+                DOM.eduCard.style.borderColor = eduBorder;
+            }
+
+            if (isAlarm) {
+                DOM.meterBadge.classList.add('vswr-alarm');
+            } else {
+                DOM.meterBadge.classList.remove('vswr-alarm');
+                DOM.meterBadge.style.color = state.vswr > 1.5 ? (state.vswr > 2.0 ? 'var(--vswr-orange)' : 'var(--vswr-yellow)') : 'var(--vswr-color)';
+            }
+        }
+
+        // Draw Canvas Zone 1: Analog Meter
+        function drawMeter() {
+            const w = ctxMeter.canvas.width;
+            const h = ctxMeter.canvas.height;
+            const cx = w / 2;
+            const cy = h - 30; // Pivot point at bottom center
+            const r = 200; // Arc radius
+
+            ctxMeter.clearRect(0, 0, w, h);
+
+            // Draw brushed steel back panel
+            let bgGrad = ctxMeter.createRadialGradient(cx, cy, 20, cx, cy, w);
+            bgGrad.addColorStop(0, '#1c2535');
+            bgGrad.addColorStop(1, '#0d1117');
+            ctxMeter.fillStyle = bgGrad;
+            ctxMeter.fillRect(0, 0, w, h);
+
+            // Draw Arc Segments (behind the scale)
+            ctxMeter.lineWidth = 14;
+            ctxMeter.lineCap = 'butt';
+            
+            const startAng = -135 * Math.PI / 180;
+            const endAng = -45 * Math.PI / 180;
+            const angRange = endAng - startAng;
+
+            // Map VSWR zones to arc
+            // We map a pseudo-log scale 1.0 -> 10 over the 90 degree arc
+            // let 1.0 = left, 1.5 = 20%, 2.5 = 40%, 3.5 = 60%, 10 = 80%, inf = 100%
+            const mapVswrAng = (v) => {
+                if (v === Infinity) return startAng + angRange;
+                if (v <= 1.0) return startAng;
+                // arbitrary non-linear mapping mimicking real SWR meters
+                let pct = Math.log(v) / Math.log(10); // log10(v) -> 1=0%, 10=100%, we tweak this
+                if (v > 10) pct = 1.0; 
+                return startAng + (pct * angRange * 0.9); 
+            };
+
+            const bands = [
+                {v1: 1.0, v2: 1.5, c: '#00ff9f'}, // Green
+                {v1: 1.5, v2: 2.5, c: '#f1c40f'}, // Yellow
+                {v1: 2.5, v2: 3.5, c: '#e67e22'}, // Orange
+                {v1: 3.5, v2: Infinity, c: '#ff3a5c'} // Red
+            ];
+
+            bands.forEach(b => {
+                ctxMeter.beginPath();
+                ctxMeter.arc(cx, cy, r, mapVswrAng(b.v1), mapVswrAng(b.v2));
+                ctxMeter.strokeStyle = b.c;
+                ctxMeter.stroke();
+            });
+
+            // Draw SWR Scale Line & Ticks
+            ctxMeter.lineWidth = 2;
+            ctxMeter.strokeStyle = '#e6edf3';
+            ctxMeter.beginPath();
+            ctxMeter.arc(cx, cy, r + 15, startAng, endAng);
+            ctxMeter.stroke();
+
+            // Tick marks & Text
+            const vswrTicks = [1.0, 1.5, 2.0, 3.0, 5.0, 10, Infinity];
+            ctxMeter.fillStyle = '#e6edf3';
+            ctxMeter.font = '14px "Rajdhani"';
+            ctxMeter.textAlign = 'center';
+
+            ctxMeter.fillText("SWR", cx, cy - r - 40);
+
+            vswrTicks.forEach(v => {
+                let a = mapVswrAng(v);
+                let xOut = cx + (r + 15) * Math.cos(a);
+                let yOut = cy + (r + 15) * Math.sin(a);
+                let xIn = cx + (r + 6) * Math.cos(a);
+                let yIn = cy + (r + 6) * Math.sin(a);
+                
+                ctxMeter.beginPath();
+                ctxMeter.moveTo(xIn, yIn);
+                ctxMeter.lineTo(xOut, yOut);
+                ctxMeter.stroke();
+
+                let txt = v === Infinity ? '∞' : v.toString();
+                let xT = cx + (r + 28) * Math.cos(a);
+                let yT = cy + (r + 28) * Math.sin(a) + 5;
+                ctxMeter.fillText(txt, xT, yT);
+            });
+
+            // Draw cross-needles
+            // Left needle (Forward), pivots from bottom center, sweeps from Left to Right
+            // Maps state.powerLevel (1 - 1000)
+            const drawNeedle = (targetAngleVar, color, initOffsetAngle) => {
+                let angDeg = state[targetAngleVar]; // this is -45 to +45
+                // The actual pivot angle is straight up (-90deg), so offset from that
+                // To create a "cross-needle" effect from bottom-center, we map FWD from 135deg to 45deg
+                // Wait, cross needles usually pivot from bottom corners. If from center, they just overlap.
+                // The prompt says: "both pivoting from the bottom-center of the arc". We will draw two needles 
+                // swinging symmetrically but representing FWD/REF power.
+                // FWD goes from Left to right (-135 to -45).
+                // REF goes from Right to Left (-45 to -135).
+                
+                let baseAng;
+                if (targetAngleVar === 'pwrNeedleCurrent') {
+                    // FWD: maps -45 to +45 into -135 to -45
+                    baseAng = -90 + angDeg; 
+                } else {
+                    // REF: swings opposite direction?
+                    baseAng = -90 - angDeg; 
+                }
+
+                let a = baseAng * Math.PI / 180;
+
+                ctxMeter.beginPath();
+                ctxMeter.moveTo(cx, cy);
+                ctxMeter.lineTo(cx + (r + 10) * Math.cos(a), cy + (r + 10) * Math.sin(a));
+                ctxMeter.lineWidth = 3;
+                ctxMeter.strokeStyle = color;
+                // Add glow
+                ctxMeter.shadowBlur = 10;
+                ctxMeter.shadowColor = color;
+                ctxMeter.stroke();
+                ctxMeter.shadowBlur = 0; // reset
+            };
+
+            // Ease needles
+            if (state.meterSweepActive) {
+                // Intro sweep logic
+                state.pwrNeedleCurrent = lerp(state.pwrNeedleCurrent, 45, 0.05);
+                state.refNeedleCurrent = lerp(state.refNeedleCurrent, 45, 0.05);
+                if (Math.abs(state.pwrNeedleCurrent - 45) < 1) {
+                    state.meterSweepActive = false;
+                }
+            } else {
+                state.pwrNeedleCurrent = lerp(state.pwrNeedleCurrent, state.pwrNeedleTarget, 0.1);
+                state.refNeedleCurrent = lerp(state.refNeedleCurrent, state.refNeedleTarget, 0.1);
+            }
+
+            drawNeedle('pwrNeedleCurrent', '#00d4ff'); // Blue FWD
+            drawNeedle('refNeedleCurrent', '#ff3a5c'); // Red REF
+
+            // Common pivot styling
+            ctxMeter.beginPath();
+            ctxMeter.arc(cx, cy, 15, 0, Math.PI, true);
+            ctxMeter.fillStyle = '#2a3a52';
+            ctxMeter.fill();
+            ctxMeter.lineWidth = 1;
+            ctxMeter.strokeStyle = '#e6edf3';
+            ctxMeter.stroke();
+
+            // Labels below pivot
+            ctxMeter.fillStyle = '#00d4ff';
+            ctxMeter.font = '12px "Share Tech Mono"';
+            ctxMeter.textAlign = 'right';
+            ctxMeter.fillText("FWD", cx - 25, cy + 15);
+            ctxMeter.fillStyle = '#ff3a5c';
+            ctxMeter.textAlign = 'left';
+            ctxMeter.fillText("REF", cx + 25, cy + 15);
+        }
+
+
+        // Draw Canvas Zone 2: Standing Wave
+        function drawWave() {
+            const w = ctxWave.canvas.width;
+            const h = ctxWave.canvas.height;
+            const midY = h / 2;
+            const A = 45; // Max amplitude for incident wave
+
+            ctxWave.clearRect(0, 0, w, h);
+
+            // Draw center axis
+            ctxWave.beginPath();
+            ctxWave.moveTo(0, midY);
+            ctxWave.lineTo(w, midY);
+            ctxWave.strokeStyle = '#2a3a52';
+            ctxWave.lineWidth = 2;
+            ctxWave.stroke();
+
+            const N_POINTS = 300;
+            const L = 2; // draw 2 wavelengths across canvas
+            const k = (2 * Math.PI * L) / w; // wave number
+            const omega = 0.12; // angular frequency (animation speed)
+
+            // Calculate current time step
+            if (!state.isFrozen) {
+                state.animTime += omega;
+            }
+            const t = state.animTime;
+
+            let ptsFwd = [];
+            let ptsRef = [];
+            let ptsSum = [];
+
+            // Node marker tracking
+            let sumMinArr = []; // Looking for minimums in envelope (nodes)
+
+            for (let i = 0; i <= N_POINTS; i++) {
+                let x = (i / N_POINTS) * w;
+                
+                // Incident wave: A * sin(wt - kx) -- moves right
+                let yFwd = A * Math.sin(t - k * x);
+                
+                // Reflected wave: |Γ| * A * sin(wt + kx + phase) -- moves left
+                let yRef = state.gammaMag * A * Math.sin(t + k * x + state.gammaPhase);
+
+                // Standing wave
+                let ySum = yFwd + yRef;
+
+                ptsFwd.push({x, y: midY - yFwd});
+                ptsRef.push({x, y: midY - yRef});
+                ptsSum.push({x, y: midY - ySum});
+            }
+
+            const drawPath = (pts, color, width, dash = []) => {
+                ctxWave.beginPath();
+                ctxWave.moveTo(pts[0].x, pts[0].y);
+                for(let i = 1; i<pts.length; i++) {
+                    ctxWave.lineTo(pts[i].x, pts[i].y);
+                }
+                ctxWave.strokeStyle = color;
+                ctxWave.lineWidth = width;
+                ctxWave.setLineDash(dash);
+                ctxWave.stroke();
+                ctxWave.setLineDash([]); // reset
+            };
+
+            // 1. Reflected (Red)
+            if (state.gammaMag > 0.01) {
+                drawPath(ptsRef, '#ff3a5c', 2, [5, 5]);
+            }
+            // 2. Incident (Blue)
+            drawPath(ptsFwd, '#00d4ff', 2);
+            // 3. Standing Wave (White)
+            drawPath(ptsSum, 'rgba(255,255,255,0.85)', 2.5);
+
+            // Draw vertical node markers based on envelope nulls
+            // Envelope minimums occur where Incident and Reflected are 180deg out of phase
+            // Location x: wt - kx - (wt + kx + phase) = +/- pi, 3pi... -> -2kx - phase = pi => 2kx = -phase - pi
+            // The envelope is stationary. Envelope(x) = sqrt(1 + Gamma^2 + 2*Gamma*cos(2kx + phase)) * A
+            // Minimums of envelope occur when cos(2kx + phase) = -1 => 2kx + phase = (2n+1)pi
+            // Maxima (antinodes) occur when cos(2kx + phase) = 1 => 2kx + phase = 2n*pi
+
+            // We'll draw dashed vertical lines at the nodes (if significant Gamma)
+            if (state.gammaMag > 0.1) {
+                ctxWave.lineWidth = 1;
+                ctxWave.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctxWave.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctxWave.font = '10px "Rajdhani"';
+                ctxWave.textAlign = 'center';
+
+                // Find X pixels where 2kx + phase = (2n+1)pi
+                for (let n = -5; n <= 5; n++) {
+                    let targetRad = (2*n + 1) * Math.PI;
+                    let xPx = (targetRad - state.gammaPhase) / (2 * k);
+                    if (xPx >= 0 && xPx <= w) {
+                        ctxWave.beginPath();
+                        ctxWave.moveTo(xPx, 20);
+                        ctxWave.lineTo(xPx, h - 20);
+                        ctxWave.stroke();
+                        ctxWave.fillText("NODE", xPx, h - 5);
+                    }
+                }
+            }
+        }
+
+        // Animation Loop
+        function animate() {
+            drawMeter();
+            drawWave();
+            requestAnimationFrame(animate);
+        }
+
+        // Event Listeners
+        DOM.sldPwr.addEventListener('input', (e) => { state.powerLog = parseFloat(e.target.value); calculatePhysics(); });
+        DOM.sldZl.addEventListener('input', (e) => { state.zL = parseInt(e.target.value); calculatePhysics(); });
+        DOM.sldZ0.addEventListener('input', (e) => { state.z0 = parseInt(e.target.value); calculatePhysics(); });
+
+        DOM.pZ0.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                let v = parseInt(e.target.getAttribute('data-val'));
+                DOM.sldZ0.value = v;
+                state.z0 = v;
+                calculatePhysics();
+            });
+        });
+
+        DOM.toggles.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                DOM.toggles.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.loadType = btn.getAttribute('data-type');
+                if(state.loadType === 'open' || state.loadType === 'short') {
+                    // force SLDZL visual
+                    DOM.sldZl.value = state.zL; // keeps the track same but disables
+                }
+                calculatePhysics();
+            });
+        });
+
+        DOM.btnFreeze.addEventListener('click', () => {
+            state.isFrozen = !state.isFrozen;
+            DOM.btnFreeze.innerText = state.isFrozen ? '[ UNFREEZE ]' : '[ FREEZE ]';
+            DOM.btnFreeze.style.background = state.isFrozen ? '#e67e22' : '#000';
+            DOM.btnFreeze.style.color = state.isFrozen ? '#000' : '#fff';
+        });
+
+        DOM.btnReset.addEventListener('click', () => {
+            state.powerLog = 2; // 100W
+            state.zL = 50;
+            state.z0 = 50;
+            state.loadType = 'res';
+            
+            DOM.sldPwr.value = 2;
+            DOM.sldZl.value = 50;
+            DOM.sldZ0.value = 50;
+            
+            DOM.toggles.forEach(b => b.classList.remove('active'));
+            DOM.toggles[0].classList.add('active');
+
+            state.isFrozen = false;
+            DOM.btnFreeze.innerText = '[ FREEZE ]';
+            DOM.btnFreeze.style.background = '#000';
+            DOM.btnFreeze.style.color = '#fff';
+
+            calculatePhysics();
+        });
+
+        // Initialize
+        function init() {
+            // Fake startup sweep
+            state.pwrNeedleCurrent = -45; // Start all the way left
+            state.refNeedleCurrent = -45;
+            state.meterSweepActive = true;
+            
+            calculatePhysics();
+            animate();
+        }
+
+        // Boot
+        window.addEventListener('load', init);
+
+        // --------------------------------------------------------------------------
+        // RF ASSISTANT COMPONENT
+        // --------------------------------------------------------------------------
+                class RFAssistantPanel {
+            constructor() {
+                this.root = document.createElement('div');
+                this.root.id = 'rfap-root';
+                document.body.appendChild(this.root);
+                
+                this.state = {
+                    mode: localStorage.getItem('rfap_view_mode') || 'expanded', 
+                    history: JSON.parse(localStorage.getItem('rfap_history') || '[]'),
+                    alertsEnabled: localStorage.getItem('rfap_notifications') !== 'false',
+                    contextOpen: localStorage.getItem('rfap_context_open') === 'true',
+                    isThinking: false,
+                    apiKey: localStorage.getItem('rfap_api_key') || ''
+                };
+                
+                this.cooldowns = new Map();
+                
+                this.root.innerHTML = `
+                    <div class="rfap-tab" id="rfap-tab" tabindex="0" role="button" aria-label="Toggle RF Assistant">
+                        <div class="rfap-tab-icon">✨</div>
+                        <div class="rfap-tab-sep"></div>
+                        <div class="rfap-tab-lbl">A S S T</div>
+                        <div class="rfap-tab-chev" id="rfap-tab-chev">‹</div>
+                    </div>
+
+                    <div class="rfap-panel rfap-state-${this.state.mode}" id="rfap-panel">
+                        <div class="rfap-beacon-view">
+                            <div class="rfap-bot-icon" style="font-size:24px;">🤖</div>
+                        </div>
+
+                        <div class="rfap-full-view">
+                            <div class="rfap-header">
+                                <div class="rfap-title-area">
+                                    <span class="rfap-bot-icon">🤖✨</span>
+                                    <span class="rfap-title-text" id="rfap-title">RF LAB ASSISTANT</span>
+                                </div>
+                                <div class="rfap-controls">
+                                    <button class="rfap-btn" id="rfap-btn-exp" title="Expand">⊡</button>
+                                    <button class="rfap-btn" id="rfap-btn-col" title="Collapse Header">◫</button>
+                                    <button class="rfap-btn" id="rfap-btn-bec" title="Beacon Mode">←</button>
+                                    <button class="rfap-btn" id="rfap-btn-menu" title="Menu">⋮</button>
+                                </div>
+                            </div>
+
+                            <div class="rfap-menu" id="rfap-menu-drop">
+                                <button id="rfap-menu-settings">API Settings</button>
+                                <button id="rfap-menu-alerts">Alerts: <span id="rfap-st-alerts" style="color:#38bdf8">${this.state.alertsEnabled?'ON':'OFF'}</span></button>
+                                <button id="rfap-menu-export">Copy Transcript</button>
+                                <hr>
+                                <button id="rfap-menu-clear" style="color:#ff3a5c">Clear History</button>
+                            </div>
+
+                            <div class="rfap-settings" id="rfap-settings-panel">
+                                <h3>API Configuration</h3>
+                                <p>To use the AI, please enter your Google Gemini API Key.</p>
+                                <input type="password" id="rfap-inp-key" value="${this.state.apiKey}">
+                                <div style="display:flex; gap:8px; margin-top:auto">
+                                    <button class="rfap-btn" style="flex:1" id="rfap-btn-cancel">CANCEL</button>
+                                    <button class="rfap-btn" style="flex:1; background:#38bdf8; color:#000" id="rfap-btn-save">SAVE</button>
+                                </div>
+                            </div>
+
+                            <div class="rfap-banner-toggle" id="rfap-banner-tog">
+                                <span>LIVE INSTRUMENT DATA</span>
+                                <span class="rfap-banner-chev">›</span>
+                            </div>
+                            <div class="rfap-banner ${this.state.contextOpen ? 'rfap-banner-expanded' : ''}" id="rfap-banner">
+                                <div class="rfap-banner-grid">
+                                    <div><span class="rfap-banner-lbl">Γ = </span><span class="rfap-banner-val" id="rfap-ctx-gam">0.00</span></div>
+                                    <div><span class="rfap-banner-lbl">VSWR = </span><span class="rfap-banner-val" id="rfap-ctx-vswr">1.00:1</span></div>
+                                    <div><span class="rfap-banner-lbl">P_fwd = </span><span class="rfap-banner-val" id="rfap-ctx-pfwd">100.0W</span></div>
+                                    <div><span class="rfap-banner-lbl">P_ref = </span><span class="rfap-banner-val" id="rfap-ctx-pref">0.0W</span></div>
+                                    <div><span class="rfap-banner-lbl">Z_L = </span><span class="rfap-banner-val" id="rfap-ctx-zl">50Ω</span></div>
+                                    <div><span class="rfap-banner-lbl">Z_0 = </span><span class="rfap-banner-val" id="rfap-ctx-z0">50Ω</span></div>
+                                </div>
+                                <div class="rfap-sever-bar" id="rfap-ctx-sev"></div>
+                            </div>
+
+                            <div class="rfap-thread" id="rfap-thread"></div>
+
+                            <div class="rfap-input-zone">
+                                <input type="text" class="rfap-input" id="rfap-inp" placeholder="Ask a question..." autocomplete="off">
+                                <button class="rfap-btn-send" id="rfap-btn-send">
+                                    SEND <span style="font-size:16px; margin-left:4px">✨</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.dom = {
+                    tab: document.getElementById('rfap-tab'),
+                    panel: document.getElementById('rfap-panel'),
+                    chev: document.getElementById('rfap-tab-chev'),
+                    bannerTog: document.getElementById('rfap-banner-tog'),
+                    banner: document.getElementById('rfap-banner'),
+                    thread: document.getElementById('rfap-thread'),
+                    inp: document.getElementById('rfap-inp'),
+                    btnSend: document.getElementById('rfap-btn-send'),
+                    menuGrp: document.getElementById('rfap-menu-drop'),
+                    settings: document.getElementById('rfap-settings-panel')
+                };
+
+                this.bindEvents();
+                this.renderHistory();
+                this.updateLayout();
+                this.runBootSequence();
+
+                if (this.state.history.length === 0) {
+                    this.pushHistory('bot', "Hello! I'm your Gemini-powered RF design assistant. I can help answer doubts related to impedance matching, transmission lines, Smith Charts, or anything in the lab. How can I help?");
+                }
+            }
+
+            bindEvents() {
+                this.dom.tab.addEventListener('click', () => {
+                    if (this.state.mode === 'expanded') this.setMode('beacon');
+                    else this.setMode('expanded');
+                });
+                
+                document.getElementById('rfap-btn-exp').addEventListener('click', () => this.setMode('expanded'));
+                document.getElementById('rfap-btn-col').addEventListener('click', () => this.setMode('header'));
+                document.getElementById('rfap-btn-bec').addEventListener('click', () => this.setMode('beacon'));
+                
+                const mn = this.dom.menuGrp;
+                document.getElementById('rfap-btn-menu').addEventListener('click', (e) => { e.stopPropagation(); mn.classList.toggle('active'); });
+                document.addEventListener('click', () => mn.classList.remove('active'));
+                
+                document.getElementById('rfap-menu-settings').addEventListener('click', () => { this.dom.settings.classList.add('active'); mn.classList.remove('active'); });
+                document.getElementById('rfap-btn-cancel').addEventListener('click', () => this.dom.settings.classList.remove('active'));
+                document.getElementById('rfap-btn-save').addEventListener('click', () => {
+                    this.state.apiKey = document.getElementById('rfap-inp-key').value.trim();
+                    localStorage.setItem('rfap_api_key', this.state.apiKey);
+                    this.dom.settings.classList.remove('active');
+                });
+
+                document.getElementById('rfap-menu-alerts').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.state.alertsEnabled = !this.state.alertsEnabled;
+                    localStorage.setItem('rfap_notifications', this.state.alertsEnabled.toString());
+                    document.getElementById('rfap-st-alerts').innerText = this.state.alertsEnabled ? 'ON' : 'OFF';
+                });
+
+                document.getElementById('rfap-menu-clear').addEventListener('click', () => {
+                    this.state.history = [];
+                    this.saveHistory();
+                    this.dom.thread.innerHTML = '';
+                    this.pushHistory('system', "History cleared.");
+                });
+
+                document.getElementById('rfap-menu-export').addEventListener('click', () => this.exportTranscript());
+
+                this.dom.bannerTog.addEventListener('click', () => {
+                    this.state.contextOpen = !this.state.contextOpen;
+                    localStorage.setItem('rfap_context_open', this.state.contextOpen.toString());
+                    if(this.state.contextOpen) this.dom.banner.classList.add('rfap-banner-expanded');
+                    else this.dom.banner.classList.remove('rfap-banner-expanded');
+                });
+
+                this.dom.inp.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.sendMessage(); });
+                this.dom.btnSend.addEventListener('click', () => this.sendMessage());
+
+                document.addEventListener('vswr_update', () => this.handleSimulatorUpdate());
+            }
+
+            setMode(newMode) {
+                this.dom.panel.className = `rfap-panel rfap-state-${newMode}`;
+                if(newMode === 'expanded') this.dom.chev.style.transform = 'rotate(180deg)';
+                else this.dom.chev.style.transform = 'rotate(0deg)';
+                
+                this.state.mode = newMode;
+                localStorage.setItem('rfap_view_mode', newMode);
+                this.updateLayout();
+            }
+
+            updateLayout() {
+                const appNode = document.querySelector('.app-container');
+                if (appNode) {
+                    let w = 0;
+                    if(this.state.mode==='expanded') w = 360;
+                    else if(this.state.mode==='header') w = 220;
+                    else if(this.state.mode==='beacon') w = 60;
+                    appNode.style.marginRight = `${w}px`;
+                }
+            }
+
+            runBootSequence() {
+                const textNodes = ['INITIALIZING...', 'LOADING RF MODULE...', 'CALIBRATING...', 'RF LAB ASSISTANT'];
+                let t = document.getElementById('rfap-title');
+                if(!t) return;
+                let delay = 0;
+                textNodes.forEach((txt, i) => {
+                    setTimeout(() => { if(t) t.innerText = txt; }, delay);
+                    delay += 600;
+                });
+            }
+
+            handleSimulatorUpdate() {
+                const s = window.vswr_state;
+                if (!s) return;
+
+                const elVswr = document.getElementById('rfap-ctx-vswr');
+                const prevV = elVswr.innerText;
+                const newV = (s.vswr === Infinity ? '∞' : s.vswr.toFixed(3)) + ':1';
+                
+                if(prevV !== newV) {
+                    elVswr.style.color = '#fff';
+                    setTimeout(()=> elVswr.style.color = '', 150);
+                }
+
+                document.getElementById('rfap-ctx-gam').innerText = s.gammaMag >= 0.999 ? '1.00' : s.gammaMag.toFixed(3);
+                elVswr.innerText = newV;
+                document.getElementById('rfap-ctx-pfwd').innerText = s.powerLevel.toFixed(1) + 'W';
+                document.getElementById('rfap-ctx-pref').innerText = s.pRef.toFixed(1) + 'W';
+                document.getElementById('rfap-ctx-zl').innerText = `${s.zL}Ω`;
+                document.getElementById('rfap-ctx-z0').innerText = `${s.z0}Ω`;
+
+                let sev = (s.vswr - 1) / 4.0;
+                if(sev>1) sev=1; if(sev<0) sev=0;
+                document.getElementById('rfap-ctx-sev').style.width = `${sev*100}%`;
+
+                if (!this.state.alertsEnabled) return;
+                const now = Date.now();
+                const checkCD = (k) => { if (!this.cooldowns.has(k) || now - this.cooldowns.get(k) > 45000) { this.cooldowns.set(k, now); return true; } return false; };
+
+                if (s.vswr >= 3.0 && checkCD('high_vswr')) {
+                    this.triggerProactive(`⚠ Warning: SWR is currently ${s.vswr.toFixed(2)}:1. Reflected power is building up in the system.`);
+                }
+            }
+
+            triggerProactive(msgText) {
+                if(this.state.mode === 'beacon') {
+                    this.setMode('expanded');
+                }
+                this.pushHistory('system', msgText);
+            }
+
+            formatMsg(text) {
+                return text
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/\`(.*?)\`/g, '<code>$1</code>')
+                    .replace(/^(Γ|VSWR|RL|ML|Pfwd|Prefl|Ptrans)\s*=(.*?)$/gm, '<div class="rfap-formula">$1 = $2</div>')
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/\n/g, '<br/>');
+            }
+
+            renderHistory() {
+                this.dom.thread.innerHTML = '';
+                this.state.history.forEach(m => this.appendBubble(m.role, m.parts[0].text));
+            }
+
+            appendBubble(role, text) {
+                const msg = document.createElement('div');
+                msg.className = role === 'system' ? `rfap-system-msg` : `rfap-msg rfap-msg-${role === 'model' || role === 'bot' ? 'bot' : 'user'}`;
+                
+                let formatted = `<p>${this.formatMsg(text)}</p>`;
+                if(role === 'model' || role === 'bot') {
+                     let time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                     formatted += `<div class="rfap-time">${time}</div>`;
+                }
+                
+                msg.innerHTML = formatted;
+                this.dom.thread.appendChild(msg);
+                this.dom.thread.scrollTop = this.dom.thread.scrollHeight;
+                return msg;
+            }
+
+            appendStreamingBubble(text) {
+                const msg = document.createElement('div');
+                msg.className = `rfap-msg rfap-msg-bot`;
+                this.dom.thread.appendChild(msg);
+                
+                const words = text.split(' ');
+                let i = 0;
+                let curHTML = '';
+                
+                 return new Promise(resolve => {
+                    const timer = setInterval(() => {
+                        if(i >= words.length) {
+                             clearInterval(timer);
+                             let time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                             msg.innerHTML = `<p>${this.formatMsg(text)}</p><div class="rfap-time">${time}</div>`;
+                             this.dom.thread.scrollTop = this.dom.thread.scrollHeight;
+                             resolve();
+                             return;
+                        }
+                        curHTML += words[i] + ' ';
+                        msg.innerHTML = `<p>${this.formatMsg(curHTML)}</p>`;
+                        this.dom.thread.scrollTop = this.dom.thread.scrollHeight;
+                        i++;
+                    }, 40);
+                });
+            }
+
+             pushHistory(role, text) {
+                if(role === 'system'){
+                    this.appendBubble(role, text);
+                    return;
+                }
+                this.state.history.push({ role: role === 'bot' ? 'model' : 'user', parts: [{ text: text }] });
+                if (this.state.history.length > 40) this.state.history.shift();
+                this.saveHistory();
+                this.appendBubble(role, text);
+            }
+            saveHistory() { localStorage.setItem('rfap_history', JSON.stringify(this.state.history)); }
+
+            exportTranscript() {
+                const blob = new Blob([this.state.history.map(m=>`[${m.role}] ${m.parts[0].text}`).join('\n\n')], { type: 'text/plain' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob); a.download = 'rf_assistant_transcript.txt';
+                document.body.appendChild(a); a.click();
+            }
+
+            setLoading(on) {
+                this.state.isThinking = on;
+                this.dom.btnSend.disabled = on;
+                if (on) {
+                    this.dom.btnSend.innerHTML = '<div class="rfap-spinner"></div>';
+                    const typing = document.createElement('div');
+                    typing.className = 'rfap-msg rfap-msg-bot';
+                    typing.id = 'rfap-type-bub';
+                    typing.innerHTML = '<div class="rfap-typing"><div class="rfap-dot"></div><div class="rfap-dot"></div><div class="rfap-dot"></div></div>';
+                    this.dom.thread.appendChild(typing);
+                    this.dom.thread.scrollTop = this.dom.thread.scrollHeight;
+                } else {
+                    this.dom.btnSend.innerHTML = 'SEND <span style="font-size:16px; margin-left:4px">✨</span>';
+                    const bub = document.getElementById('rfap-type-bub');
+                    if (bub) bub.remove();
+                }
+            }
+
+            async sendMessage(retryText = null) {
+                if (this.state.isThinking) return;
+                
+                const text = retryText || this.dom.inp.value.trim();
+                if (!text) return;
+
+                if (!this.state.apiKey) {
+                    this.dom.menuGrp.classList.add('active');
+                    this.dom.settings.classList.add('active');
+                    this.appendBubble('system', "API Key required. Please enter it in the settings panel above.");
+                    return;
+                }
+
+                if (!retryText) {
+                    this.dom.inp.value = '';
+                    this.pushHistory('user', text);
+                }
+
+                this.setLoading(true);
+
+                const s = window.vswr_state || { powerLevel:0, zL:50, z0:50, gammaMag:0, vswr:1, pRef:0, returnLoss:Infinity, loadType:'res' };
+                const curSysPrompt = `You are a friendly Gemini-powered RF Design Assistant inside a professional VSWR Educational Simulator. 
+                
+Current simulator reading: Source Power: ${s.powerLevel}W, Z_L: ${s.zL}Ω, VSWR: ${s.vswr}, Reflected Power: ${s.pRef}W.
+
+Answer concisely. Use styling rules (e.g. VSWR = result).`;
+
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.state.apiKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            systemInstruction: { parts: [{text: curSysPrompt}] },
+                            contents: this.state.history.map(m => ({ role: m.role, parts: m.parts }))
+                        }),
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                    const data = await res.json();
+                    const botText = data.candidates[0].content.parts[0].text;
+                    
+                    this.setLoading(false);
+                    
+                    this.state.history.push({ role: 'model', parts: [{ text: botText }] });
+                    this.saveHistory();
+                    await this.appendStreamingBubble(botText);
+                    
+                } catch (err) {
+                    this.setLoading(false);
+                    const failedMsg = this.state.history.pop();
+                    this.saveHistory();
+                    this.appendBubble('system', `[ERROR] ${err.message}`);
+                }
+            }
+        }
+
+        window.addEventListener('load', () => { window.rf_assistant = new RFAssistantPanel(); });
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
